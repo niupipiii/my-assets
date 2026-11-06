@@ -269,7 +269,7 @@ export function OcrSheet({
         <div className="card" style={{ padding: 14 }}>
           <div style={{ fontSize: 13, fontWeight: 700 }}>先设置识别口令</div>
           <p className="tiny faint" style={{ margin: '4px 0 10px', lineHeight: 1.5 }}>
-            口令与 Vercel 的 OCR_ACCESS_TOKEN 一致，只存在这台设备。它不是模型 API Key。
+            口令与本地 .env.local / Vercel 的 OCR_ACCESS_TOKEN 一致，只存在这台设备。它不是模型 API Key。
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
             <input

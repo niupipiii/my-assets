@@ -220,7 +220,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res,
       503,
       'not_configured',
-      '识别服务未配置：请在 Vercel 设置 OCR_VISION_BASE_URL / OCR_VISION_API_KEY / OCR_VISION_MODEL / OCR_ACCESS_TOKEN',
+      '识别服务未配置：请在本地 .env.local 或 Vercel 设置 OCR_VISION_BASE_URL / OCR_VISION_API_KEY / OCR_VISION_MODEL / OCR_ACCESS_TOKEN，并重启服务',
     )
     return
   }
