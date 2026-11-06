@@ -560,7 +560,7 @@ export function SettingsScreen({
             <div>OCR_ACCESS_TOKEN</div>
           </div>
           <p className="tiny faint" style={{ margin: '8px 0 0', lineHeight: 1.5 }}>
-            推荐 Gemini 2.5 Flash（Google 的 OpenAI 兼容端点）或 GPT-4o-mini。本地联调时把同名变量写进 .env.local 并重启 npm run dev；线上写进 Vercel 环境变量。只在点按识别时上传压缩后的截图，服务端不保存图片。
+            推荐 DeepSeek 开放平台 deepseek-flash（已实测支持图片）、Gemini 2.5 Flash 或 GPT-4o-mini。本地联调时把同名变量写进 .env.local 并重启 npm run dev；线上写进 Vercel 环境变量。只在点按识别时上传压缩后的截图，服务端不保存图片。
           </p>
         </div>
       </Sheet>

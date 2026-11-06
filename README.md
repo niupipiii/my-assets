@@ -85,12 +85,13 @@ C = S + OI + R − Δ − OO
 Vercel 环境变量：
 
 ```text
-OCR_VISION_BASE_URL   例：https://generativelanguage.googleapis.com/v1beta/openai
+OCR_VISION_BASE_URL   例：https://api.deepseek.com
 OCR_VISION_API_KEY    供应商 Key（不要提交到 git）
-OCR_VISION_MODEL      例：gemini-2.5-flash / gpt-4o-mini
+OCR_VISION_MODEL      例：deepseek-flash / gemini-2.5-flash / gpt-4o-mini
 OCR_ACCESS_TOKEN      你自定义的访问口令，App 设置里填同一串
 ```
 
+- **DeepSeek 开放平台已实测可用**：`OCR_VISION_BASE_URL=https://api.deepseek.com`、`OCR_VISION_MODEL=deepseek-flash`，`deepseek-flash` 支持图片输入；`deepseek-v4-pro` 是纯文本，不适合 OCR。
 - API Key 只在 Vercel 环境变量里；`OCR_ACCESS_TOKEN` 只是防止公开接口被陌生人盗刷。
 - 本地联调：把同名变量放进 `.env.local`（已在 `.gitignore` 中），Vite 开发服务器会通过内置的 `/api/ocr` 中间件调用 `api/ocr.ts`。
 - 没有口令/接口未配置时，识别页会提示；开发环境还有一个「用示例结果预览确认界面」按钮（只用于检查确认 UI，不会上传）。
