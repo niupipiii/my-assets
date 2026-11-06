@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+  <title>旧版数据备份 · 资产全景</title>
+  <style>
+    :root {
+      --bg: #f2f2f7; --card: #fff; --text: #1c1c1e; --muted: #6c6c70;
+      --fill: rgba(120,120,128,.12); --accent: #5e5ce6; --separator: rgba(60,60,67,.12);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#000; --card:#1c1c1e; --text:#fff; --muted:rgba(235,235,245,.6); --fill:rgba(120,120,128,.24); --accent:#7d7aff; --separator:rgba(84,84,88,.65); color-scheme: dark; }
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    .page { max-width: 520px; margin: 0 auto; padding: calc(24px + env(safe-area-inset-top)) 18px calc(32px + env(safe-area-inset-bottom)); }
+    h1 { font-size: 28px; letter-spacing: -0.6px; margin: 0 0 4px; }
+    p { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0; }
+    .card { background: var(--card); border: .5px solid var(--separator); border-radius: 18px; padding: 16px; margin-top: 14px; }
+    .label { font-size: 12px; color: var(--muted); }
+    .big { font-size: 30px; font-weight: 800; letter-spacing: -1px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+    .row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: .5px solid var(--separator); font-size: 14px; }
+    .row:last-child { border-bottom: 0; }
+    .muted { color: var(--muted); }
+    .mono { font-variant-numeric: tabular-nums; }
+    .btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 48px; border: 0; border-radius: 14px; background: var(--fill); color: var(--text); font-size: 15px; font-weight: 650; margin-top: 10px; text-decoration: none; }
+    .btn.primary { background: linear-gradient(135deg, #6d6af0, #818cf8); color: #fff; }
+    .warn { color: #ff9f0a; font-size: 13px; line-height: 1.6; }
+    .pill { display: inline-block; padding: 4px 9px; border-radius: 99px; background: var(--fill); color: var(--muted); font-size: 12px; }
+    code { font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>旧版数据备份</h1>
+    <p>这个页面只读取旧版「资产全景」在本机保存的数据，不会上传、不会修改。</p>
+    <div id="content"></div>
+    <a class="btn" href="/">打开新版资产全景</a>
+    <p style="margin-top: 18px" class="muted">如果这里显示没有数据，说明你当前访问的网址与旧版记账时不是同一个 origin（域名 + 协议）。请回到当时添加到主屏幕的那个网址再打开本页。</p>
+  </div>
+  <script>
+    (function () {
+      const root = document.getElementById('content')
+      function read(key) {
+        try { return localStorage.getItem(key) } catch (e) { return null }
+      }
+      function num(value) {
+        const n = Number(String(value).replace(/[¥￥,，\s元]/g, ''))
+        return Number.isFinite(n) ? n : 0
+      }
+      function totalOf(record) {
+        if (!record || !record.assets || typeof record.assets !== 'object') return 0
+        let sum = 0
+        Object.values(record.assets).forEach(function (subs) {
+          if (subs && typeof subs === 'object') {
+            Object.values(subs).forEach(function (value) { sum += num(value) })
+          } else {
+            sum += num(subs)
+          }
+        })
+        return Math.round(sum * 100) / 100
+      }
+      function money(value) {
+        return '¥' + value.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
+      }
+      const raw = read('asset-records')
+      const configRaw = read('asset-config')
+      if (!raw) {
+        root.innerHTML = '<div class="card"><div class="warn">没有找到旧版数据（localStorage 键 asset-records）。</div><p style="margin-top:8px">旧数据仍然安全，只是当前网址读不到它。</p></div>'
+        return
+      }
+      let records
+      try {
+        records = JSON.parse(raw)
+      } catch (error) {
+        root.innerHTML = '<div class="card"><div class="warn">旧版数据不是合法 JSON，无法读取。原始字符串仍保留在浏览器里。</div></div>'
+        return
+      }
+      if (!Array.isArray(records) || records.length === 0) {
+        root.innerHTML = '<div class="card"><div class="muted">旧版记录是空的。</div></div>'
+        return
+      }
+      const rows = records
+        .filter(function (record) { return record && Number(record.year) && Number(record.month) })
+        .sort(function (a, b) { return a.year - b.year || a.month - b.month })
+        .map(function (record) {
+          return { year: Number(record.year), month: Number(record.month), total: totalOf(record), ts: record.ts }
+        })
+      const latest = rows[rows.length - 1]
+      const accounts = new Set()
+      records.forEach(function (record) {
+        if (!record || !record.assets) return
+        Object.keys(record.assets).forEach(function (category) {
+          const subs = record.assets[category]
+          if (subs && typeof subs === 'object') Object.keys(subs).forEach(function (name) { accounts.add(category + '|' + name) })
+        })
+      })
+      const summary = document.createElement('div')
+      summary.className = 'card'
+      summary.innerHTML =
+        '<div class="label">最新总资产</div>' +
+        '<div class="big">' + money(latest.total) + '</div>' +
+        '<div class="muted" style="margin-top:4px;font-size:13px">' + rows.length + ' 个月 · ' + accounts.size + ' 个账户 · 最新 ' + latest.year + '年' + latest.month + '月</div>'
+      root.appendChild(summary)
+
+      const list = document.createElement('div')
+      list.className = 'card'
+      rows.slice().reverse().forEach(function (row) {
+        const line = document.createElement('div')
+        line.className = 'row'
+        line.innerHTML = '<span>' + row.year + '年' + row.month + '月</span><span class="mono">' + money(row.total) + '</span>'
+        list.appendChild(line)
+      })
+      root.appendChild(list)
+
+      function download() {
+        const payload = JSON.stringify({ app: 'asset-panorama-legacy', exportedAt: new Date().toISOString(), records: records, config: configRaw ? JSON.parse(configRaw) : null }, null, 2)
+        const blob = new Blob([payload], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = '资产全景-旧版原始数据.json'
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        setTimeout(function () { URL.revokeObjectURL(url) }, 2000)
+      }
+
+      const downloadBtn = document.createElement('button')
+      downloadBtn.className = 'btn primary'
+      downloadBtn.textContent = '下载原始 JSON 备份'
+      downloadBtn.onclick = download
+      root.appendChild(downloadBtn)
+
+      if (navigator.canShare) {
+        const shareBtn = document.createElement('button')
+        shareBtn.className = 'btn'
+        shareBtn.textContent = '分享备份到「文件」或微信'
+        shareBtn.onclick = async function () {
+          const payload = JSON.stringify({ app: 'asset-panorama-legacy', exportedAt: new Date().toISOString(), records: records, config: configRaw ? JSON.parse(configRaw) : null }, null, 2)
+          const file = new File([payload], '资产全景-旧版原始数据.json', { type: 'application/json' })
+          if (navigator.canShare({ files: [file] })) {
+            try { await navigator.share({ files: [file], title: '资产全景旧版备份' }) } catch (e) {}
+          } else {
+            download()
+          }
+        }
+        root.appendChild(shareBtn)
+      }
+
+      const note = document.createElement('div')
+      note.className = 'card'
+      note.innerHTML = '<div class="muted" style="font-size:13px;line-height:1.6">旧版的 <code>asset-records</code> 和 <code>asset-config</code> 仍然保留。新版迁移时会再自动保存一份副本，不会删除这里的数据。</div>'
+      root.appendChild(note)
+    })()
+  </script>
+</body>
+</html>
