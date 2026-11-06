@@ -27,7 +27,7 @@ describe('import/export', () => {
   it('round trips json', () => {
     const parsed = parseLedgerJson(serializeLedger(ledger))
     expect(parsed.ledger.accounts[0].name).toBe('招商银行')
-    expect(parsed.ledger.snapshots[0].balances.a).toBe(1234.5)
+    expect(parsed.ledger.snapshots[0].balances.a).toBe(1235)
     expect(parsed.ledger.flows['2026-11'].salary).toBe(20000)
   })
 

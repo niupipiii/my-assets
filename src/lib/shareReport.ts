@@ -123,7 +123,7 @@ export async function buildMonthReportImage({ ledger, month }: ShareData): Promi
     ctx.fillText(categoryOf(slice.category).short, 132, y)
     ctx.fillStyle = 'rgba(255,255,255,.78)'
     ctx.font = '600 30px "PingFang SC", -apple-system, sans-serif'
-    ctx.fillText(`${(slice.share * 100).toFixed(1)}%`, 900, y)
+    ctx.fillText(`${Math.round(slice.share * 100)}%`, 900, y)
     y += 54
   }
 

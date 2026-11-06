@@ -422,13 +422,19 @@ export function Overview({
             </section>
           )}
 
-          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-            <button className="btn" style={{ flex: 1 }} onClick={() => onOpenEntry(month)}>
-              <Pencil size={16} /> 编辑本月
+          <div style={{ marginTop: 12 }}>
+            <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => onOpenEntry(month)}>
+              <Pencil size={16} /> 编辑 {monthLabel(month)} 余额
             </button>
-            <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => onOpenEntry(currentKey)}>
-              <Plus size={17} /> 记录本月
-            </button>
+            {month !== currentKey && !getSnapshot(ledger, currentKey) && (
+              <button
+                className="btn btn-ghost"
+                style={{ width: '100%', marginTop: 4, minHeight: 36, fontSize: 13 }}
+                onClick={() => onOpenEntry(currentKey)}
+              >
+                本月（{monthLabel(currentKey)}）还未记录 · 现在记录
+              </button>
+            )}
           </div>
         </>
       )}

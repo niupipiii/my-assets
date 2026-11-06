@@ -1,5 +1,5 @@
-import { round2 } from '../domain/money'
 import { getSnapshot, monthKey, splitMonthKey } from '../domain/selectors'
+import { roundMoney } from '../domain/money'
 import type { Account, LedgerSettings, LedgerV2, MonthFlow, Snapshot } from '../domain/types'
 import { maybeDailyBackup, writeLedger } from './storage'
 
@@ -55,7 +55,7 @@ function sanitizeBalances(
   for (const [accountId, value] of Object.entries(balances)) {
     if (!known.has(accountId)) continue
     if (!Number.isFinite(value)) continue
-    result[accountId] = round2(value)
+    result[accountId] = roundMoney(value)
   }
   return result
 }
@@ -64,7 +64,7 @@ function cleanFlow(flow: MonthFlow): MonthFlow {
   const result: MonthFlow = {}
   for (const field of ['salary', 'otherIncome', 'otherOutflow', 'investTransfer'] as const) {
     const value = flow[field]
-    if (typeof value === 'number' && Number.isFinite(value)) result[field] = round2(value)
+    if (typeof value === 'number' && Number.isFinite(value)) result[field] = roundMoney(value)
   }
   if (typeof flow.note === 'string' && flow.note.trim() !== '') result.note = flow.note.trim()
   return result
@@ -276,10 +276,13 @@ export function createLedgerStore(initial: LedgerV2, options: LedgerStoreOptions
     },
 
     updateSettings: (patch) => {
-      commit((current) => ({
-        ...current,
-        settings: { ...current.settings, ...patch },
-      }))
+      commit((current) => {
+        const settings = { ...current.settings, ...patch }
+        if (typeof settings.defaultSalary === 'number') {
+          settings.defaultSalary = roundMoney(settings.defaultSalary)
+        }
+        return { ...current, settings }
+      })
     },
 
     importLedger: (ledger, mode) => {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { formatMoney, formatSignedMoney, parseAmount } from '../../domain/money'
+import { formatMoney, formatSignedMoney, parseAmount, roundMoney } from '../../domain/money'
 import { monthLabel, monthMetrics } from '../../domain/selectors'
 import type { MonthFlow } from '../../domain/types'
 import { useLedger, useLedgerActions } from '../../store/LedgerProvider'
@@ -75,7 +75,7 @@ export function MonthFlowSheet({
         toast.show('工资金额格式不正确')
         return
       }
-      next.salary = value
+      next.salary = roundMoney(value)
     }
     const optionalFields: Array<[keyof MonthFlow, string]> = [
       ['otherIncome', otherIncome],
@@ -89,7 +89,7 @@ export function MonthFlowSheet({
         toast.show('有金额格式不正确')
         return
       }
-      if (value !== 0) (next as Record<string, number>)[field] = value
+      if (value !== 0) (next as Record<string, number>)[field] = roundMoney(value)
     }
     if (note.trim() !== '') next.note = note.trim()
     actions.saveFlow(month, next)

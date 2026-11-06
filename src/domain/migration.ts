@@ -1,6 +1,6 @@
 import { CATEGORIES, DEFAULT_INVESTMENT_CATEGORIES, isCategoryKey } from './categories'
 import { monthKey, snapshotKey } from './selectors'
-import { round2, safeNumber } from './money'
+import { roundMoney, safeNumber } from './money'
 import type {
   Account,
   CategoryKey,
@@ -224,7 +224,7 @@ export function parseLegacy(
         const account = accountIndex.get(`${categoryKey}|${name}`)
         if (!account) continue
         const value = safeNumber(rawValue)
-        balances[account.id] = round2(value)
+        balances[account.id] = roundMoney(value)
       }
     }
     const created = validTimestamp(record.ts, Date.UTC(year, month - 1, 1))
@@ -259,15 +259,10 @@ export function parseLegacy(
 
   const latest = snapshots[snapshots.length - 1]
   const latestTotal = latest
-    ? round2(
-        Object.entries(latest.balances).reduce(
-          (sum, [accountId, value]) => {
-            const account = accounts.find((a) => a.id === accountId)
-            return account ? sum + value : sum
-          },
-          0,
-        ),
-      )
+    ? Object.entries(latest.balances).reduce((sum, [accountId, value]) => {
+        const account = accounts.find((a) => a.id === accountId)
+        return account ? sum + roundMoney(value) : sum
+      }, 0)
     : 0
 
   const candidate: LegacyCandidate = {

@@ -17,7 +17,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { CATEGORIES, DEFAULT_INVESTMENT_CATEGORIES } from '../../domain/categories'
-import { formatMoney, parseAmount } from '../../domain/money'
+import { formatMoney, parseAmount, roundMoney } from '../../domain/money'
 import { latestSnapshot, monthLabel, totalOf } from '../../domain/selectors'
 import type { CategoryKey, LedgerV2, LegacyCandidate } from '../../domain/types'
 import {
@@ -80,12 +80,13 @@ export function SettingsScreen({
   }
 
   const saveSalary = () => {
-    const value = salaryDraft.trim() === '' ? null : parseAmount(salaryDraft)
-    if (value !== null && !Number.isFinite(value)) {
+    const parsed = salaryDraft.trim() === '' ? null : parseAmount(salaryDraft)
+    if (parsed !== null && !Number.isFinite(parsed)) {
       toast.show('金额格式不正确')
       return
     }
-    actions.updateSettings({ defaultSalary: value === null ? null : value })
+    const value = parsed === null ? null : roundMoney(parsed)
+    actions.updateSettings({ defaultSalary: value })
     setSheet(null)
     toast.show(value === null ? '已清除默认月薪' : '默认月薪已更新')
   }

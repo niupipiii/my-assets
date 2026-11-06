@@ -33,7 +33,7 @@ export function DeltaText({
   const up = value >= 0
   return (
     <span className={`${up ? 'up' : 'down'} money small ${className}`} style={{ fontWeight: 650 }}>
-      {up ? '↑' : '↓'} {percent !== undefined && percent !== null ? `${Math.abs(percent * 100).toFixed(1)}%` : null}
+      {up ? '↑' : '↓'} {percent !== undefined && percent !== null ? `${Math.round(Math.abs(percent) * 100)}%` : null}
       {percent === undefined || percent === null ? <Money value={Math.abs(value)} signed /> : null}
     </span>
   )

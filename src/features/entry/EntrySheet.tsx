@@ -13,7 +13,7 @@ import {
   prevMonthKey,
   totalOf,
 } from '../../domain/selectors'
-import { formatMoney, formatSignedMoney, parseAmount, round2 } from '../../domain/money'
+import { formatMoney, formatSignedMoney, parseAmount, round2, roundMoney } from '../../domain/money'
 import type { Account, CategoryKey, MonthFlow } from '../../domain/types'
 import { useLedger, useLedgerActions } from '../../store/LedgerProvider'
 import { useToast } from '../../components/Toast'
@@ -285,7 +285,7 @@ export function EntrySheet({
         open={open}
         onClose={cancel}
         full
-        title="记录余额"
+        title={base ? '编辑余额' : '记录余额'}
         subtitle={monthLabel(draftMonth)}
         headerRight={
           <>
@@ -553,6 +553,16 @@ export function EntrySheet({
                         onChange={(event) =>
                           setDraft((current) => ({ ...current, [account.id]: event.target.value }))
                         }
+                        onBlur={(event) => {
+                          const raw = event.target.value
+                          if (raw.trim() === '') return
+                          const parsedValue = parseAmount(raw)
+                          if (!Number.isFinite(parsedValue)) return
+                          const rounded = String(roundMoney(parsedValue))
+                          if (rounded !== raw) {
+                            setDraft((current) => ({ ...current, [account.id]: rounded }))
+                          }
+                        }}
                       />
                     </div>
                   ))}

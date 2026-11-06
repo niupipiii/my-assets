@@ -33,7 +33,7 @@ export function monthLabel(key: string, withYear = true): string {
 
 export function shortMonthLabel(key: string): string {
   const { year, month } = splitMonthKey(key)
-  return `${String(year).slice(2)}.${pad2(month)}`
+  return `${String(year).slice(2)}/${pad2(month)}`
 }
 
 export function currentMonthKey(now = new Date()): string {

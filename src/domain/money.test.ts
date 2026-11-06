@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatMoney, formatSignedMoney, parseAmount, round2, toCents } from './money'
+import { formatCompact, formatMoney, formatPercent, formatSignedMoney, parseAmount, round2, toCents } from './money'
 
 describe('money', () => {
   it('parses common formats', () => {
@@ -20,11 +20,14 @@ describe('money', () => {
   })
 
   it('formats', () => {
-    expect(formatMoney(1234.5)).toBe('¥1,234.50')
+    expect(formatMoney(1234.5)).toBe('¥1,235')
     expect(formatMoney(1234)).toBe('¥1,234')
-    expect(formatMoney(-1234.5)).toBe('-¥1,234.50')
+    expect(formatMoney(-1234.5)).toBe('-¥1,235')
     expect(formatSignedMoney(1234)).toBe('+¥1,234')
     expect(formatSignedMoney(-1234)).toBe('-¥1,234')
     expect(formatSignedMoney(0)).toBe('¥0')
+    expect(formatCompact(150000)).toBe('15万')
+    expect(formatPercent(0.007)).toBe('1%')
+    expect(formatPercent(0.5)).toBe('50%')
   })
 })

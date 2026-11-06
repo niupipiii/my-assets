@@ -10,6 +10,12 @@ export function round2(value: number): number {
   return Math.round((Number.isFinite(value) ? value : 0) * 100) / 100
 }
 
+/** 金额统一取整：正负都按"四舍五入远离 0"，避免 -1234.5 变成 -1234。 */
+export function roundMoney(value: number): number {
+  const number = Number.isFinite(value) ? value : 0
+  return number < 0 ? -Math.round(-number) : Math.round(number)
+}
+
 export function safeNumber(value: unknown): number {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0
   if (typeof value === 'string') {
@@ -20,32 +26,25 @@ export function safeNumber(value: unknown): number {
 }
 
 const grouped = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 })
-const grouped2 = new Intl.NumberFormat('zh-CN', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
 
-/** ¥1,234.56 / ¥1,234（整数不显示小数）；负数写成 -¥1,234 */
+/** 统一显示为整数；负数写成 -¥1,234 */
 export function formatMoney(yuan: number): string {
-  const cents = toCents(yuan)
-  const hasCents = Math.abs(cents) % 100 !== 0
-  const text = hasCents ? grouped2.format(Math.abs(cents) / 100) : grouped.format(Math.abs(cents) / 100)
-  return `${cents < 0 ? '-' : ''}¥${text}`
+  const rounded = roundMoney(yuan)
+  return `${rounded < 0 ? '-' : ''}¥${grouped.format(Math.abs(rounded))}`
 }
 
 /** 不带符号的纯数字，用于输入框旁的展示 */
 export function formatNumber(yuan: number): string {
-  const cents = toCents(yuan)
-  const hasCents = Math.abs(cents) % 100 !== 0
-  return hasCents ? grouped2.format(cents / 100) : grouped.format(cents / 100)
+  return grouped.format(roundMoney(yuan))
 }
 
-/** 紧凑金额：1.2万 / 3.50亿 / 3,500 */
+/** 紧凑金额：1万 / 3亿 / 3,500；不出现小数点 */
 export function formatCompact(yuan: number): string {
-  const abs = Math.abs(yuan)
-  if (abs >= 1e8) return `${(yuan / 1e8).toFixed(2)}亿`
-  if (abs >= 1e4) return `${(yuan / 1e4).toFixed(abs >= 1e6 ? 0 : 1)}万`
-  return grouped.format(yuan)
+  const rounded = roundMoney(yuan)
+  const abs = Math.abs(rounded)
+  if (abs >= 1e8) return `${Math.round(rounded / 1e8)}亿`
+  if (abs >= 1e4) return `${Math.round(rounded / 1e4)}万`
+  return grouped.format(rounded)
 }
 
 export function formatSignedMoney(yuan: number): string {
@@ -53,15 +52,17 @@ export function formatSignedMoney(yuan: number): string {
   return `${yuan > 0 ? '+' : '-'}${formatMoney(Math.abs(yuan))}`
 }
 
-export function formatPercent(ratio: number | null, digits = 1): string {
+export function formatPercent(ratio: number | null, digits = 0): string {
   if (ratio === null || !Number.isFinite(ratio)) return '—'
-  return `${(ratio * 100).toFixed(digits)}%`
+  const fixed = (ratio * 100).toFixed(digits)
+  return `${Number(fixed) === 0 ? '0' : fixed}%`
 }
 
-export function formatSignedPercent(ratio: number | null, digits = 1): string {
+export function formatSignedPercent(ratio: number | null, digits = 0): string {
   if (ratio === null || !Number.isFinite(ratio)) return '—'
-  const value = (ratio * 100).toFixed(digits)
-  return `${ratio > 0 ? '+' : ''}${value}%`
+  const fixed = (ratio * 100).toFixed(digits)
+  if (Number(fixed) === 0) return '0%'
+  return `${ratio > 0 ? '+' : ''}${fixed}%`
 }
 
 /** 隐藏金额模式 */

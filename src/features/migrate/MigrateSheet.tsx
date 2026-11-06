@@ -136,6 +136,7 @@ export function MigrateSheet({
               <li>先保存旧版原始 JSON，再写一份迁移前备份。</li>
               <li>旧键 <code>asset-records</code> / <code>asset-config</code> 不删除，可随时导出。</li>
               <li>旧数据没有工资，净开销会在你设置月薪后开始计算。</li>
+              <li>旧版金额有小数时会四舍五入到整数；原始 JSON 仍保留小数。</li>
             </ul>
           </div>
 

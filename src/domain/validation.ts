@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { CATEGORY_KEYS } from './categories'
 import type { LedgerV2 } from './types'
+import { roundMoney } from './money'
 
 export const LEDGER_KEY = 'myassets:v2:ledger'
 export const OCR_TOKEN_KEY = 'myassets:v2:ocr-token'
@@ -106,7 +107,7 @@ export function normalizeLedger(input: LedgerV2): { ledger: LedgerV2; warnings: 
       for (const [accountId, value] of Object.entries(snapshot.balances)) {
         if (!seenAccounts.has(accountId)) continue
         if (!Number.isFinite(value)) continue
-        balances[accountId] = Math.round(value * 100) / 100
+        balances[accountId] = roundMoney(value)
       }
       return { ...snapshot, balances }
     })
@@ -118,7 +119,7 @@ export function normalizeLedger(input: LedgerV2): { ledger: LedgerV2; warnings: 
     const cleaned: LedgerV2['flows'][string] = {}
     for (const field of ['salary', 'otherIncome', 'otherOutflow', 'investTransfer'] as const) {
       const value = flow[field]
-      if (typeof value === 'number' && Number.isFinite(value)) cleaned[field] = value
+      if (typeof value === 'number' && Number.isFinite(value)) cleaned[field] = roundMoney(value)
     }
     if (typeof flow.note === 'string' && flow.note.trim() !== '') cleaned.note = flow.note
     flows[normalizedKey] = cleaned
@@ -136,6 +137,10 @@ export function normalizeLedger(input: LedgerV2): { ledger: LedgerV2; warnings: 
       flows,
       settings: {
         ...input.settings,
+        defaultSalary:
+          input.settings.defaultSalary === null || input.settings.defaultSalary === undefined
+            ? null
+            : roundMoney(input.settings.defaultSalary),
         investmentCategories:
           investmentCategories.length > 0 ? investmentCategories : ['stock', 'fund', 'bond', 'crypto'],
       },

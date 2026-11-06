@@ -66,7 +66,7 @@
         return Math.round(sum * 100) / 100
       }
       function money(value) {
-        return '¥' + value.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
+        return '¥' + Math.round(value).toLocaleString('zh-CN')
       }
       const raw = read('asset-records')
       const configRaw = read('asset-config')
@@ -155,7 +155,7 @@
 
       const note = document.createElement('div')
       note.className = 'card'
-      note.innerHTML = '<div class="muted" style="font-size:13px;line-height:1.6">旧版的 <code>asset-records</code> 和 <code>asset-config</code> 仍然保留。新版迁移时会再自动保存一份副本，不会删除这里的数据。</div>'
+      note.innerHTML = '<div class="muted" style="font-size:13px;line-height:1.6">页面展示按整数四舍五入，下载的 JSON 保留原始小数。旧版的 <code>asset-records</code> 和 <code>asset-config</code> 仍然保留；新版迁移时会再自动保存一份副本，不会删除这里的数据。</div>'
       root.appendChild(note)
     })()
   </script>

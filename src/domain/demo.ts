@@ -1,6 +1,6 @@
 import { CATEGORIES, DEFAULT_INVESTMENT_CATEGORIES } from './categories'
+import { roundMoney } from './money'
 import { monthKey, shiftMonth } from './selectors'
-import { round2 } from './money'
 import type { Account, LedgerV2, MonthFlow, Snapshot } from './types'
 
 interface DemoAccountSeed {
@@ -106,7 +106,7 @@ export function buildDemoLedger(options: DemoOptions = {}): LedgerV2 {
         if (!account) continue
         const current = values.get(account.id) ?? 0
         const noise = 1 + (random() - 0.5) * 0.012
-        values.set(account.id, round2(current * (1 + (seed.growth ?? 0) * noise)))
+        values.set(account.id, roundMoney(current * (1 + (seed.growth ?? 0) * noise)))
       }
       // 现金：工资 − 消费 − 转入 + 少量利息
       cashTotal = cashTotal + salary - spending - transfer + cashTotal * 0.0004
@@ -118,17 +118,17 @@ export function buildDemoLedger(options: DemoOptions = {}): LedgerV2 {
     const cashNoiseSum = cashNoise.reduce((sum, v) => sum + v, 0)
     cashAccounts.forEach((account, accountIndex) => {
       const share = cashNoise[accountIndex] / cashNoiseSum
-      values.set(account.id, round2(cashTotal * share))
+      values.set(account.id, roundMoney(cashTotal * share))
     })
 
     if (transfer > 0) {
       const target = byName.get('A股')
-      if (target) values.set(target.id, round2((values.get(target.id) ?? 0) + transfer))
+      if (target) values.set(target.id, roundMoney((values.get(target.id) ?? 0) + transfer))
     }
 
     const balances: Record<string, number> = {}
     for (const account of accounts) {
-      balances[account.id] = round2(values.get(account.id) ?? 0)
+      balances[account.id] = roundMoney(values.get(account.id) ?? 0)
     }
 
     snapshots.push({

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ImagePlus, Loader2, ScanLine, ShieldCheck, Trash2, Wand2 } from 'lucide-react'
 import { CATEGORIES } from '../../domain/categories'
-import { formatMoney, parseAmount } from '../../domain/money'
+import { formatMoney, parseAmount, roundMoney } from '../../domain/money'
 import type { Account } from '../../domain/types'
 import { useToast } from '../../components/Toast'
 import { Sheet } from '../../components/Sheet'
@@ -107,7 +107,7 @@ export function OcrSheet({
         source: sourceLabel,
         institution: result.institution,
         label: balance.label || result.institution || '未命名账户',
-        amount: String(balance.amount),
+        amount: String(roundMoney(balance.amount)),
         confidence: balance.confidence,
         evidence: balance.evidence,
         accountId: matched ?? '',
@@ -174,7 +174,7 @@ export function OcrSheet({
           source: '粘贴',
           institution: '',
           label: candidate.label,
-          amount: String(candidate.amount),
+          amount: String(roundMoney(candidate.amount)),
           confidence: candidate.confidence,
           accountId: matched ?? '',
           include: true,
@@ -196,7 +196,7 @@ export function OcrSheet({
     const balances: Record<string, number> = {}
     const conflicts = new Set<string>()
     for (const item of included) {
-      const amount = parseAmount(item.amount)
+      const amount = roundMoney(parseAmount(item.amount))
       if (!Number.isFinite(amount) || amount <= 0) continue
       if (item.accountId in balances) conflicts.add(item.accountId)
       balances[item.accountId] = amount
@@ -211,9 +211,9 @@ export function OcrSheet({
 
   const useSample = () => {
     const samples = [
-      { label: '零钱', amount: '12,345.67', name: '微信零钱', institution: '微信' },
-      { label: '一卡通', amount: '88,000.00', name: '招商银行', institution: '招商银行' },
-      { label: '余额宝', amount: '20,000.00', name: '余额宝', institution: '支付宝' },
+      { label: '零钱', amount: '12346', name: '微信零钱', institution: '微信' },
+      { label: '一卡通', amount: '88000', name: '招商银行', institution: '招商银行' },
+      { label: '余额宝', amount: '20000', name: '余额宝', institution: '支付宝' },
     ]
     const next = samples.map((sample) => {
       const account = activeAccounts.find((item) => item.name === sample.name)

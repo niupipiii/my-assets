@@ -306,33 +306,29 @@ export function ReportsScreen({
                 配置漂移
                 <span className="tiny faint">百分点变化</span>
               </div>
-              {drift.map((row) => (
-                <div key={row.category} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
-                  <span className="dot" style={{ background: categoryOf(row.category).color }} />
-                  <span style={{ flex: 1, fontSize: 13 }}>{categoryOf(row.category).short}</span>
-                  <span className="money tiny" style={{ color: 'var(--text-2)' }}>
-                    {(row.currentShare * 100).toFixed(1)}%
-                  </span>
-                  <span
-                    className="money tiny"
-                    style={{
-                      width: 54,
-                      textAlign: 'right',
-                      fontWeight: 650,
-                      color:
-                        Math.abs(row.diff * 100) < 0.05
-                          ? 'var(--text-2)'
-                          : row.diff > 0
-                            ? 'var(--green)'
-                            : 'var(--red)',
-                    }}
-                  >
-                    {Math.abs(row.diff * 100) < 0.05
-                      ? '0.0pp'
-                      : `${row.diff > 0 ? '+' : ''}${(row.diff * 100).toFixed(1)}pp`}
-                  </span>
-                </div>
-              ))}
+              {drift.map((row) => {
+                const pp = Math.round(row.diff * 100)
+                return (
+                  <div key={row.category} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
+                    <span className="dot" style={{ background: categoryOf(row.category).color }} />
+                    <span style={{ flex: 1, fontSize: 13 }}>{categoryOf(row.category).short}</span>
+                    <span className="money tiny" style={{ color: 'var(--text-2)' }}>
+                      {Math.round(row.currentShare * 100)}%
+                    </span>
+                    <span
+                      className="money tiny"
+                      style={{
+                        width: 54,
+                        textAlign: 'right',
+                        fontWeight: 650,
+                        color: pp === 0 ? 'var(--text-2)' : pp > 0 ? 'var(--green)' : 'var(--red)',
+                      }}
+                    >
+                      {pp === 0 ? '0pp' : `${pp > 0 ? '+' : ''}${pp}pp`}
+                    </span>
+                  </div>
+                )
+              })}
             </section>
 
             {movers.length > 0 && (
