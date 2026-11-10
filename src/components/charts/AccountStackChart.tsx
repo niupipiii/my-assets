@@ -1,34 +1,15 @@
 import { useMemo } from 'react'
 import { CATEGORIES, categoryOf } from '../../domain/categories'
-import { getSnapshot, monthLabel, prevMonthKey, shortMonthLabel, shiftMonth } from '../../domain/selectors'
+import {
+  categoryTotalOf,
+  getSnapshot,
+  monthLabel,
+  prevMonthKey,
+  shortMonthLabel,
+  shiftMonth,
+} from '../../domain/selectors'
 import { formatMoney } from '../../domain/money'
-import type { Account, LedgerV2 } from '../../domain/types'
-
-function hexToRgb(hex: string): [number, number, number] {
-  const value = hex.replace('#', '')
-  return [
-    parseInt(value.slice(0, 2), 16),
-    parseInt(value.slice(2, 4), 16),
-    parseInt(value.slice(4, 6), 16),
-  ]
-}
-
-function mix(base: string, target: string, amount: number): string {
-  const a = hexToRgb(base)
-  const b = hexToRgb(target)
-  const t = Math.max(0, Math.min(1, amount))
-  return `#${a
-    .map((channel, index) => Math.round(channel + (b[index] - channel) * t).toString(16).padStart(2, '0'))
-    .join('')}`
-}
-
-const SHADES = [0, 0.28, -0.22, 0.5, -0.42, 0.12]
-
-function accountColor(account: Account, index: number): string {
-  const base = categoryOf(account.category).color
-  const shade = SHADES[index % SHADES.length]
-  return shade === 0 ? base : mix(base, shade > 0 ? '#ffffff' : '#000000', Math.abs(shade))
-}
+import type { LedgerV2 } from '../../domain/types'
 
 interface Point {
   key: string
@@ -46,46 +27,30 @@ export function AccountStackChart({ ledger, month }: { ledger: LedgerV2; month: 
     () => new Map(keys.map((key) => [key, getSnapshot(ledger, key)])),
     [keys, ledger],
   )
-  const accounts = useMemo(() => {
-    return ledger.accounts
-      .filter((account) =>
-        keys.some((key) => Math.abs(snapshots.get(key)?.balances[account.id] ?? 0) > 0),
-      )
-      .sort((a, b) => {
-        const orderA = CATEGORIES.findIndex((category) => category.key === a.category)
-        const orderB = CATEGORIES.findIndex((category) => category.key === b.category)
-        return orderA - orderB || a.order - b.order
-      })
-  }, [ledger.accounts, keys, snapshots])
-
-  const colors = useMemo(() => {
-    const perCategory = new Map<string, number>()
-    const map = new Map<string, string>()
-    for (const account of accounts) {
-      const index = perCategory.get(account.category) ?? 0
-      map.set(account.id, accountColor(account, index))
-      perCategory.set(account.category, index + 1)
-    }
-    return map
-  }, [accounts])
+  const categories = useMemo(
+    () =>
+      CATEGORIES.filter((category) =>
+        keys.some((key) => categoryTotalOf(snapshots.get(key), ledger, category.key) > 0),
+      ),
+    [keys, snapshots, ledger],
+  )
 
   const points: Point[] = useMemo(
     () =>
       keys.map((key) => {
         const snapshot = snapshots.get(key)
-        const values = accounts.map((account) => Math.max(0, snapshot?.balances[account.id] ?? 0))
-        const total = values.reduce((sum, value) => sum + value, 0)
-        return { key, values, total }
+        const values = categories.map((category) => categoryTotalOf(snapshot, ledger, category.key))
+        return { key, values, total: values.reduce((sum, value) => sum + value, 0) }
       }),
-    [keys, snapshots, accounts],
+    [keys, snapshots, categories, ledger],
   )
 
   const current = points[points.length - 1]
   const prevSnapshot = getSnapshot(ledger, prevMonthKey(month))
-  const prevValues = accounts.map((account) => Math.max(0, prevSnapshot?.balances[account.id] ?? 0))
+  const prevValues = categories.map((category) => categoryTotalOf(prevSnapshot, ledger, category.key))
   const prevTotal = prevValues.reduce((sum, value) => sum + value, 0)
 
-  if (accounts.length === 0) {
+  if (categories.length === 0) {
     return <div className="small faint" style={{ padding: '12px 0' }}>还没有可展示的账户余额</div>
   }
 
@@ -104,7 +69,7 @@ export function AccountStackChart({ ledger, month }: { ledger: LedgerV2; month: 
         viewBox={`0 0 ${width} ${height}`}
         style={{ display: 'block' }}
         role="img"
-        aria-label="账户月度构成 100% 堆积图"
+        aria-label="一级账户月度构成 100% 堆积图"
       >
         <line x1="4" x2={width - 4} y1={top} y2={top} stroke="var(--separator)" strokeWidth="0.7" strokeDasharray="2 4" />
         <line
@@ -134,25 +99,25 @@ export function AccountStackChart({ ledger, month }: { ledger: LedgerV2; month: 
                 />
               )}
               {point.total > 0 &&
-                accounts.map((account, accountIndex) => {
-                  const value = point.values[accountIndex] ?? 0
+                categories.map((category, categoryIndex) => {
+                  const value = point.values[categoryIndex] ?? 0
                   if (value <= 0) return null
                   const segment = (value / point.total) * plotHeight
                   y -= segment
                   const share = Math.round((value / point.total) * 100)
                   return (
                     <rect
-                      key={account.id}
+                      key={category.key}
                       x={x}
                       y={y}
                       width={barWidth}
                       height={segment}
-                      fill={colors.get(account.id)}
+                      fill={categoryOf(category.key).color}
                       stroke="var(--card)"
                       strokeWidth="0.5"
                     >
                       <title>
-                        {`${monthLabel(point.key)} · ${account.name} · ${
+                        {`${monthLabel(point.key)} · ${categoryOf(category.key).label} · ${
                           ledger.settings.hideAmounts ? `${share}%` : `${formatMoney(value)} · ${share}%`
                         }`}
                       </title>
@@ -190,20 +155,20 @@ export function AccountStackChart({ ledger, month }: { ledger: LedgerV2; month: 
           borderTop: '0.5px solid var(--separator)',
         }}
       >
-        {accounts.map((account, index) => {
+        {categories.map((category, index) => {
           const currentValue = current.values[index] ?? 0
           const share = current.total > 0 ? currentValue / current.total : 0
           const prevValue = prevValues[index] ?? 0
           const prevShare = prevTotal > 0 ? prevValue / prevTotal : 0
           const pp = Math.round((share - prevShare) * 100)
           return (
-            <div key={account.id} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <div key={category.key} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
               <span
                 style={{
                   width: 8,
                   height: 8,
                   borderRadius: 3,
-                  background: colors.get(account.id),
+                  background: category.color,
                   flex: 'none',
                 }}
               />
@@ -217,7 +182,7 @@ export function AccountStackChart({ ledger, month }: { ledger: LedgerV2; month: 
                   textOverflow: 'ellipsis',
                 }}
               >
-                {account.name}
+                {category.label}
               </span>
               <span className="money tiny" style={{ color: 'var(--text-2)', fontWeight: 650 }}>
                 {Math.round(share * 100)}%

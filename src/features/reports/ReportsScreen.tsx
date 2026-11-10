@@ -18,6 +18,7 @@ import { EmptyState } from '../../components/EmptyState'
 import { CategoryIcon } from '../../components/CategoryIcon'
 import { MiniBars } from '../../components/charts/MiniBars'
 import { AccountStackChart } from '../../components/charts/AccountStackChart'
+import { AccountChangeChart } from '../../components/charts/AccountChangeChart'
 import { shareMonthReport } from '../../lib/shareReport'
 
 export function ReportsScreen({
@@ -180,10 +181,18 @@ export function ReportsScreen({
 
             <section className="card" style={{ marginTop: 12 }}>
               <div className="section-title" style={{ margin: 0, marginBottom: 8 }}>
-                账户月度构成
-                <span className="tiny faint">每月 100% · 按账户</span>
+                一级账户月度构成
+                <span className="tiny faint">每月 100% · 按一级账户</span>
               </div>
               <AccountStackChart ledger={ledger} month={month} />
+            </section>
+
+            <section className="card" style={{ marginTop: 12 }}>
+              <div className="section-title" style={{ margin: 0, marginBottom: 8 }}>
+                一级账户月度变化
+                <span className="tiny faint">绝对值 · 较上月</span>
+              </div>
+              <AccountChangeChart ledger={ledger} month={month} />
             </section>
           </>
         )
