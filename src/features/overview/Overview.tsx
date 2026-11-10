@@ -20,7 +20,6 @@ import {
   monthMetrics,
   monthSeries,
   prevMonthKey,
-  snapshotKey,
   topMovers,
   totalOf,
 } from '../../domain/selectors'
@@ -39,14 +38,12 @@ export function Overview({
   onPickMonth,
   onOpenEntry,
   onOpenFlow,
-  onOpenSnapshot,
 }: {
   month: string
   onMonthChange: (key: string) => void
   onPickMonth: () => void
   onOpenEntry: (month?: string) => void
   onOpenFlow: () => void
-  onOpenSnapshot: (key: string) => void
 }) {
   const ledger = useLedger()
   const [range, setRange] = useState<'6' | '12'>('12')
@@ -65,10 +62,6 @@ export function Overview({
   const series = monthSeries(ledger, month, range === '6' ? 6 : 12)
   const allocation = allocationOf(ledger, month)
   const movers = topMovers(ledger, month, 4)
-  const recent = [...ledger.snapshots]
-    .sort((a, b) => b.year - a.year || b.month - a.month)
-    .slice(0, 4)
-
   const salary = metrics.salary
   const netSpend = metrics.netSpend
   const wealth = totalOf(snapshot, ledger)
@@ -437,67 +430,6 @@ export function Overview({
             )}
           </div>
         </>
-      )}
-
-      {recent.length > 0 && (
-        <section style={{ marginTop: 22 }}>
-          <div className="section-title">
-            最近记录
-            <button
-              className="tiny btn-ghost"
-              style={{ fontWeight: 600 }}
-              onClick={() => onOpenSnapshot(latestKey ?? (recent[0] ? snapshotKey(recent[0]) : ''))}
-            >
-              查看明细
-            </button>
-          </div>
-          <div className="list">
-            {recent.map((item) => {
-              const key = snapshotKey(item)
-              const value = totalOf(item, ledger)
-              const previous = getSnapshot(ledger, prevMonthKey(key))
-              const delta = previous ? value - totalOf(previous, ledger) : null
-              return (
-                <button key={item.id} className="list-row" onClick={() => onMonthChange(key)}>
-                  <div
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 10,
-                      display: 'grid',
-                      placeItems: 'center',
-                      background: 'var(--fill-2)',
-                      fontSize: 11,
-                      fontWeight: 750,
-                      color: 'var(--accent)',
-                    }}
-                  >
-                    {item.month}月
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>{monthLabel(key)}</div>
-                    <div className="tiny faint">
-                      {Object.keys(item.balances).length} 个账户
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div className="money" style={{ fontSize: 14, fontWeight: 700 }}>
-                      <Money value={value} />
-                    </div>
-                    {delta !== null && (
-                      <div
-                        className="tiny money"
-                        style={{ color: delta >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 650 }}
-                      >
-                        {ledger.settings.hideAmounts ? '' : formatSignedMoney(delta)}
-                      </div>
-                    )}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </section>
       )}
 
       {latest && latestKey !== month && (

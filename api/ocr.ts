@@ -32,8 +32,11 @@ const PROMPT = `你是个人资产截图的信息提取器。用户只需要"分
 3. 不要返回全局"总资产 / 总负债 / 资产总额 / 负债总额 / 资产合计 / 汇总 / 总计"行；除非整张图只有这一个数字（作为兜底）。
 4. 同一个金额在汇总行和账户行重复出现时只返回一次，优先分类合计行。例：活期 8,855.09 和 尾号6777 8,855.09 只返回一条。
 5. label 用分类名或账户名；section 用一级分类：现金 / 储蓄 / 理财 / 基金 / 股票 / 其他；isTotal 标记是否是分类合计。
-6. institution 用机构全名，例如 中国农业银行、招商银行、中国银行、微信、支付宝。
+6. institution 用机构全名，例如 中国农业银行、招商银行、中国银行、微信、支付宝。只有截图明确出现银行名称/Logo 时才填；不要凭配色或理财产品名（例如页面里的"光大理财"）猜银行；不确定就留空。
 7. amount 纯数字，不带货币符号、千分位、单位；人民币为正数。
+8. 证券/股票 App（东方财富、证券、持仓、总资产、证券市值、可用）：只返回一条 {"label":"股票","section":"股票","isTotal":true,"amount":总资产}；看不到总资产时才用证券市值。不要返回 证券市值/可用/可取/持仓明细。
+9. 一级分类映射：活期/活钱/活钱管理/零钱 → 现金；储蓄/存款/定期/余额宝/零钱通 → 储蓄；理财/稳健投资 → 理财；基金 → 基金；股票/证券 → 股票。
+10. "投资"这种上级分组如果下面还有 存款/理财 等能映射到上述分类的子项，返回子项，不要返回上级"投资"总额；如果分组本身只对应一个分类（例如稳健投资），返回该分类合计。
 
 输出 JSON（不要 Markdown 代码块，不要解释）：
 {
@@ -127,10 +130,17 @@ function readBody(req: VercelRequest): { image?: string; mime?: string; locale?:
 const GLOBAL_TOTAL = /总资产|总负债|资产总额|负债总额|资产合计|负债合计|汇总|总计/
 
 function normalizeSection(raw: string, label: string): string {
-  const text = `${raw} ${label}`
-  if (/活期|现金|零钱|存款|尾号/.test(text)) return '现金'
-  if (/储蓄|余额宝/.test(text)) return '储蓄'
-  if (/理财|定期/.test(text)) return '理财'
+  // 先按 label 判断，避免"余额宝/存款"被页面上的"现金"分组带偏。
+  if (/余额宝|零钱通/.test(label)) return '储蓄'
+  if (/活期|活钱|现金|零钱|尾号/.test(label)) return '现金'
+  if (/储蓄|存款|定期/.test(label)) return '储蓄'
+  if (/理财|稳健投资/.test(label)) return '理财'
+  if (/基金/.test(label)) return '基金'
+  if (/股票|证券/.test(label)) return '股票'
+  const text = `${label} ${raw}`
+  if (/储蓄|存款|定期|余额宝|零钱通/.test(text)) return '储蓄'
+  if (/活期|活钱|现金|零钱|尾号/.test(text)) return '现金'
+  if (/理财|稳健投资|投资/.test(text)) return '理财'
   if (/基金/.test(text)) return '基金'
   if (/股票|证券/.test(text)) return '股票'
   return '其他'

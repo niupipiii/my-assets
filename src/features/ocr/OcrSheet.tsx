@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ImagePlus, Loader2, Plus, ScanLine, ShieldCheck, Trash2, Wand2 } from 'lucide-react'
 import { CATEGORIES } from '../../domain/categories'
+import { defaultAccountNames } from '../../domain/defaults'
 import { formatMoney, parseAmount, roundMoney } from '../../domain/money'
 import type { Account, CategoryKey } from '../../domain/types'
 import { useToast } from '../../components/Toast'
@@ -130,6 +131,7 @@ export function OcrSheet({
   }, [open])
 
   const activeAccounts = useMemo(() => accounts.filter((account) => !account.archived), [accounts])
+  const defaultNames = useMemo(defaultAccountNames, [])
   const grouped = useMemo(
     () =>
       CATEGORIES.map((category) => ({
@@ -167,25 +169,29 @@ export function OcrSheet({
   }
 
   const itemsFromResult = (result: OcrResult, sourceLabel: string): Item[] => {
-    return result.balances.map((balance) => {
+    return result.balances.flatMap((balance) => {
+      const amount = roundMoney(balance.amount)
+      if (amount === 0) return []
       const suggestion = suggestAccount(balance, result, activeAccounts)
       const matched = matchAccount(balance, result, activeAccounts)
-      return {
-        id: nextId(),
-        source: sourceLabel,
-        institution: result.institution,
-        label: balance.label || suggestion?.name || result.institution || '未命名账户',
-        section: balance.section ?? '',
-        isTotal: Boolean(balance.isTotal),
-        amount: String(roundMoney(balance.amount)),
-        confidence: balance.confidence,
-        evidence: balance.evidence,
-        accountId: matched ?? '',
-        suggestedName: suggestion?.name ?? '',
-        suggestedCategory: suggestion?.category ?? null,
-        suggestedInstitution: suggestion?.institution ?? result.institution,
-        include: true,
-      }
+      return [
+        {
+          id: nextId(),
+          source: sourceLabel,
+          institution: result.institution,
+          label: balance.label || suggestion?.name || result.institution || '未命名账户',
+          section: balance.section ?? '',
+          isTotal: Boolean(balance.isTotal),
+          amount: String(amount),
+          confidence: balance.confidence,
+          evidence: balance.evidence,
+          accountId: matched ?? '',
+          suggestedName: suggestion?.name ?? '',
+          suggestedCategory: suggestion?.category ?? null,
+          suggestedInstitution: suggestion?.institution ?? result.institution,
+          include: true,
+        },
+      ]
     })
   }
 
@@ -244,7 +250,9 @@ export function OcrSheet({
       return
     }
     setError(null)
-    const next = candidates.map((candidate) => {
+    const next = candidates
+      .filter((candidate) => roundMoney(candidate.amount) > 0)
+      .map((candidate) => {
       const category = categoryFromText(candidate.label)
       const section =
         category === 'cash'
@@ -617,7 +625,7 @@ export function OcrSheet({
                   onChange={(event) => updateItem(item.id, { amount: event.target.value })}
                 />
               </div>
-              {!item.accountId && item.suggestedName && item.suggestedCategory && (
+              {!item.accountId && item.suggestedName && item.suggestedCategory && defaultNames.has(item.suggestedName) && (
                 <div style={{ marginTop: 8 }}>
                   <button
                     className="btn"
