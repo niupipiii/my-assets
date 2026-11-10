@@ -30,7 +30,7 @@ export class OcrError extends Error {
 
 export async function recognizeImage(image: string, token: string, signal?: AbortSignal): Promise<OcrResult> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 75_000)
+  const timer = setTimeout(() => controller.abort(), 120_000)
   let response: Response
   try {
     response = await fetch('/api/ocr', {
@@ -98,7 +98,7 @@ export async function compressImage(file: File): Promise<string> {
   try {
     const image = await loadImage(objectUrl)
     const longest = Math.max(image.naturalWidth, image.naturalHeight)
-    const maxSide = 2048
+    const maxSide = 1280
     const scale = longest > maxSide ? maxSide / longest : 1
     const width = Math.max(1, Math.round(image.naturalWidth * scale))
     const height = Math.max(1, Math.round(image.naturalHeight * scale))
@@ -110,10 +110,10 @@ export async function compressImage(file: File): Promise<string> {
     context.fillStyle = '#ffffff'
     context.fillRect(0, 0, width, height)
     context.drawImage(image, 0, 0, width, height)
-    let dataUrl = canvas.toDataURL('image/jpeg', 0.82)
+    let dataUrl = canvas.toDataURL('image/jpeg', 0.72)
     if (dataUrl.length > 2_800_000) {
       const smaller = document.createElement('canvas')
-      const nextScale = Math.min(1, 1600 / Math.max(width, height))
+      const nextScale = Math.min(1, 1024 / Math.max(width, height))
       smaller.width = Math.max(1, Math.round(width * nextScale))
       smaller.height = Math.max(1, Math.round(height * nextScale))
       const ctx = smaller.getContext('2d')
@@ -121,7 +121,7 @@ export async function compressImage(file: File): Promise<string> {
         ctx.fillStyle = '#ffffff'
         ctx.fillRect(0, 0, smaller.width, smaller.height)
         ctx.drawImage(image, 0, 0, smaller.width, smaller.height)
-        dataUrl = smaller.toDataURL('image/jpeg', 0.78)
+        dataUrl = smaller.toDataURL('image/jpeg', 0.65)
       }
     }
     return dataUrl

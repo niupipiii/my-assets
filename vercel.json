@@ -5,7 +5,7 @@
   "outputDirectory": "dist",
   "functions": {
     "api/ocr.ts": {
-      "maxDuration": 30
+      "maxDuration": 60
     }
   },
   "headers": [

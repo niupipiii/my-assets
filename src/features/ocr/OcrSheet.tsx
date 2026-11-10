@@ -211,7 +211,7 @@ export function OcrSheet({
     const errors: string[] = []
     let completed = 0
     try {
-      const concurrency = Math.min(3, images.length)
+      const concurrency = Math.min(2, images.length)
       const worker = async (start: number) => {
         for (let index = start; index < images.length; index += concurrency) {
           try {

@@ -2,9 +2,9 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { timingSafeEqual } from 'node:crypto'
 import { z } from 'zod'
 
-export const maxDuration = 30
+export const maxDuration = 60
 
-const PROVIDER_TIMEOUT_MS = 25_000
+const PROVIDER_TIMEOUT_MS = 45_000
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024
 
 const BalanceSchema = z.object({
@@ -157,29 +157,6 @@ function signatureInstitution(labels: string[]): string | undefined {
   if (/余额宝|基金/.test(text)) return '支付宝'
   if (/股票|证券市值/.test(text)) return '东方财富'
   return undefined
-}
-
-/** 固定截图里必须出现的项目；漏项时做一次针对性补提取。 */
-const EXPECTED_FIELDS: Record<string, Array<{ label: string; section: string }>> = {
-  招商银行: [
-    { label: '活钱', section: '现金' },
-    { label: '存款', section: '储蓄' },
-    { label: '理财', section: '理财' },
-  ],
-  中国银行: [
-    { label: '活钱管理', section: '现金' },
-    { label: '稳健投资', section: '理财' },
-  ],
-  中国农业银行: [
-    { label: '活期', section: '现金' },
-    { label: '理财', section: '理财' },
-  ],
-  微信: [{ label: '零钱', section: '现金' }],
-  支付宝: [
-    { label: '余额宝', section: '储蓄' },
-    { label: '基金', section: '基金' },
-  ],
-  东方财富: [{ label: '股票', section: '股票' }],
 }
 
 type NormalizedBalance = {
@@ -413,47 +390,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const finalBalances: NormalizedBalance[] = [...unique.values()].slice(0, 20)
     const kindRaw = (parsed.data.kind ?? 'other').toLowerCase()
     const modelInstitution = (parsed.data.institution ?? '').trim().slice(0, 40)
-    let signature = signatureInstitution(finalBalances.map((balance) => balance.label))
-    let institution = signature ?? modelInstitution
-
-    // 六类固定截图有已知项目；模型偶尔会漏（例如招商的“存款”），对漏项做一次定向补提取。
-    if (signature) {
-      const expected = EXPECTED_FIELDS[signature] ?? []
-      const missing = expected.filter(
-        (item) =>
-          !finalBalances.some(
-            (balance) => balance.label.includes(item.label) || item.label.includes(balance.label),
-          ),
-      )
-      const repairResults = await Promise.all(
-        missing.slice(0, 2).map(async (item) => {
-          try {
-            const known = finalBalances.map((balance) => balance.label).join('、') || '无'
-            const repairPrompt = `这是${signature}的资产截图。上一轮已经识别到：${known}。请只提取「${item.label}」这一项的当前合计金额（section=${item.section}，isTotal=true），不要返回其他项目，不要返回总资产。输出 JSON：{"institution":"${signature}","balances":[{"label":"${item.label}","section":"${item.section}","isTotal":true,"amount":0,"currency":"CNY","confidence":0.9,"evidence":""}]}。如果确实没有这一项，balances 返回空数组。`
-            const repairRaw = await callProvider(baseUrl, apiKey, model, image, true, repairPrompt)
-            const repair = ResultSchema.safeParse(repairRaw)
-            if (!repair.success) return []
-            return repair.data.balances
-              .map(normalizeBalance)
-              .filter((balance): balance is NormalizedBalance => balance !== null)
-          } catch {
-            return []
-          }
-        }),
-      )
-      for (const normalized of repairResults.flat()) {
-        if (
-          !finalBalances.some(
-            (existing) =>
-              existing.label === normalized.label && existing.amount === normalized.amount,
-          )
-        ) {
-          finalBalances.push({ ...normalized, isTotal: true })
-        }
-      }
-      signature = signatureInstitution(finalBalances.map((balance) => balance.label))
-      if (signature) institution = signature
-    }
+    const signature = signatureInstitution(finalBalances.map((balance) => balance.label))
+    const institution = signature ?? modelInstitution
 
     res.status(200).json({
       ok: true,
