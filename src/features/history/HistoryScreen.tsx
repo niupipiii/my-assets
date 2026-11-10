@@ -5,6 +5,7 @@ import {
   accountDeltas,
   accountById,
   currentMonthKey,
+  displayCategories,
   monthLabel,
   monthMetrics,
   snapshotKey,
@@ -111,7 +112,7 @@ export function HistoryScreen({
         <FilterChip active={category === 'all'} onClick={() => setCategory('all')}>
           全部
         </FilterChip>
-        {CATEGORIES.map((item) => (
+        {displayCategories(ledger, true).map((item) => (
           <FilterChip
             key={item.key}
             active={category === item.key}
@@ -325,7 +326,7 @@ export function HistoryScreen({
               )}
             </div>
 
-            {CATEGORIES.map((item) => {
+            {displayCategories(ledger, true).map((item) => {
               const accounts = detail.rows.filter((row) => row.account.category === item.key)
               if (accounts.length === 0) return null
               return (

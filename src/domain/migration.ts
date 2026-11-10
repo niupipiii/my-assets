@@ -1,4 +1,5 @@
-import { CATEGORIES, DEFAULT_INVESTMENT_CATEGORIES, isCategoryKey } from './categories'
+import { ALLOCATION_CATEGORY_KEYS, CATEGORIES, DEFAULT_INVESTMENT_CATEGORIES, isCategoryKey } from './categories'
+import { normalizedCategoryForName } from './defaults'
 import { monthKey, snapshotKey } from './selectors'
 import { roundMoney, safeNumber } from './money'
 import type {
@@ -156,9 +157,10 @@ export function parseLegacy(
   const configNames = collectConfigNames(config)
   const nameMap = new Map<string, { category: CategoryKey; name: string }>()
 
-  const addName = (category: CategoryKey, name: string) => {
+  const addName = (rawCategory: CategoryKey, name: string) => {
     const clean = normalizeName(name)
     if (!clean) return
+    const category = normalizedCategoryForName(clean, rawCategory)
     const id = `${category}|${clean}`
     if (!nameMap.has(id)) nameMap.set(id, { category, name: clean })
   }
@@ -221,7 +223,8 @@ export function parseLegacy(
       if (!isCategoryKey(categoryKey) || !subs || typeof subs !== 'object') continue
       for (const [rawName, rawValue] of Object.entries(subs as Record<string, unknown>)) {
         const name = normalizeName(rawName)
-        const account = accountIndex.get(`${categoryKey}|${name}`)
+        const mappedCategory = normalizedCategoryForName(name, categoryKey)
+        const account = accountIndex.get(`${mappedCategory}|${name}`)
         if (!account) continue
         const value = safeNumber(rawValue)
         balances[account.id] = roundMoney(value)
@@ -248,6 +251,7 @@ export function parseLegacy(
       hideAmounts: false,
       defaultSalary: null,
       investmentCategories: [...DEFAULT_INVESTMENT_CATEGORIES],
+      allocationCategories: [...ALLOCATION_CATEGORY_KEYS],
       lastTab: 'overview',
       remindEntry: true,
     },

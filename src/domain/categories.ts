@@ -10,26 +10,40 @@ export interface CategoryDef {
   defaults: string[]
   /** 默认计入投资收益估算 */
   investment: boolean
+  /** 总览与默认记账结构里的主分类 */
+  primary: boolean
 }
 
 export const CATEGORIES: CategoryDef[] = [
   {
     key: 'cash',
-    label: '现金 / 存款',
+    label: '现金',
     short: '现金',
     color: '#2DD4BF',
     icon: 'wallet',
-    defaults: ['余额宝', '微信零钱', '支付宝', '招商银行'],
+    defaults: ['微信零钱', '农行现金', '中行现金', '招行现金'],
     investment: false,
+    primary: true,
   },
   {
-    key: 'stock',
-    label: '股票',
-    short: '股票',
-    color: '#818CF8',
-    icon: 'trending-up',
-    defaults: ['A股', '港股', '美股'],
+    key: 'savings',
+    label: '储蓄',
+    short: '储蓄',
+    color: '#34C759',
+    icon: 'piggy-bank',
+    defaults: ['余额宝', '招行储蓄'],
+    investment: false,
+    primary: true,
+  },
+  {
+    key: 'bond',
+    label: '理财',
+    short: '理财',
+    color: '#FB923C',
+    icon: 'landmark',
+    defaults: ['农行理财', '招行理财', '中行理财'],
     investment: true,
+    primary: true,
   },
   {
     key: 'fund',
@@ -37,17 +51,19 @@ export const CATEGORIES: CategoryDef[] = [
     short: '基金',
     color: '#6366F1',
     icon: 'pie-chart',
-    defaults: ['指数基金', '主动基金'],
+    defaults: ['基金'],
     investment: true,
+    primary: true,
   },
   {
-    key: 'bond',
-    label: '债券 / 理财',
-    short: '理财',
-    color: '#FB923C',
-    icon: 'landmark',
-    defaults: ['银行理财', '国债'],
+    key: 'stock',
+    label: '股票',
+    short: '股票',
+    color: '#818CF8',
+    icon: 'trending-up',
+    defaults: ['股票'],
     investment: true,
+    primary: true,
   },
   {
     key: 'property',
@@ -57,6 +73,7 @@ export const CATEGORIES: CategoryDef[] = [
     icon: 'home',
     defaults: ['自住房产'],
     investment: false,
+    primary: false,
   },
   {
     key: 'insurance',
@@ -66,6 +83,7 @@ export const CATEGORIES: CategoryDef[] = [
     icon: 'shield',
     defaults: ['年金险', '增额寿'],
     investment: false,
+    primary: false,
   },
   {
     key: 'crypto',
@@ -75,6 +93,7 @@ export const CATEGORIES: CategoryDef[] = [
     icon: 'bitcoin',
     defaults: ['BTC', 'ETH'],
     investment: true,
+    primary: false,
   },
   {
     key: 'other',
@@ -84,6 +103,7 @@ export const CATEGORIES: CategoryDef[] = [
     icon: 'package',
     defaults: ['其他'],
     investment: false,
+    primary: false,
   },
 ]
 
@@ -93,9 +113,12 @@ export const CATEGORY_MAP: Record<CategoryKey, CategoryDef> = Object.fromEntries
 
 export const CATEGORY_KEYS = CATEGORIES.map((c) => c.key)
 
-export const DEFAULT_INVESTMENT_CATEGORIES: CategoryKey[] = CATEGORIES.filter(
-  (c) => c.investment,
-).map((c) => c.key)
+/** 总览资产配置只展示这 5 类；其他分类有余额时合并成"其他"。 */
+export const ALLOCATION_CATEGORY_KEYS: CategoryKey[] = CATEGORIES.filter((c) => c.primary).map(
+  (c) => c.key,
+)
+
+export const DEFAULT_INVESTMENT_CATEGORIES: CategoryKey[] = ['stock', 'fund', 'bond']
 
 export const MONTH_NAMES = [
   '1月',
@@ -118,4 +141,9 @@ export function categoryOf(key: string): CategoryDef {
 
 export function isCategoryKey(value: unknown): value is CategoryKey {
   return typeof value === 'string' && value in CATEGORY_MAP
+}
+
+export function categoryOrder(key: CategoryKey): number {
+  const index = CATEGORIES.findIndex((category) => category.key === key)
+  return index < 0 ? CATEGORIES.length : index
 }

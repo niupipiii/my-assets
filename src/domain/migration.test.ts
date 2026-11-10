@@ -40,6 +40,7 @@ describe('legacy migration', () => {
     expect(ledger.meta.migratedFrom).toBe('asset-records@1')
     expect(ledger.flows).toEqual({})
     expect(ledger.settings.defaultSalary).toBeNull()
+    expect(ledger.accounts.find((account) => account.name === '余额宝')?.category).toBe('savings')
     const september = ledger.snapshots.find((snapshot) => snapshot.month === 9)
     const wechat = ledger.accounts.find((account) => account.name === '微信零钱')
     expect(september && wechat ? september.balances[wechat.id] : null).toBe(20001)

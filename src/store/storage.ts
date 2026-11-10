@@ -1,4 +1,5 @@
-import { DEFAULT_INVESTMENT_CATEGORIES } from '../domain/categories'
+import { ALLOCATION_CATEGORY_KEYS, DEFAULT_INVESTMENT_CATEGORIES } from '../domain/categories'
+import { createDefaultAccounts } from '../domain/defaults'
 import { parseLegacy, LEGACY_CONFIG_KEY, LEGACY_RECORDS_KEY, type ParsedLegacy } from '../domain/migration'
 import { parseLedgerJson } from '../domain/validation'
 import { latestSnapshot, snapshotKey, totalOf } from '../domain/selectors'
@@ -63,7 +64,7 @@ function removeRaw(key: string): boolean {
 export function emptyLedger(now = Date.now()): LedgerV2 {
   return {
     schemaVersion: 2,
-    accounts: [],
+    accounts: createDefaultAccounts(now),
     snapshots: [],
     flows: {},
     settings: {
@@ -71,6 +72,7 @@ export function emptyLedger(now = Date.now()): LedgerV2 {
       hideAmounts: false,
       defaultSalary: null,
       investmentCategories: [...DEFAULT_INVESTMENT_CATEGORIES],
+      allocationCategories: [...ALLOCATION_CATEGORY_KEYS],
       lastTab: 'overview',
       remindEntry: true,
     },

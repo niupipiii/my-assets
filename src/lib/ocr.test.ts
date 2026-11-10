@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { matchAccount, parseTextAmounts } from './ocr'
+import { matchAccount, parseTextAmounts, suggestAccount } from './ocr'
 import type { Account } from '../domain/types'
 
 const accounts: Account[] = [
   { id: 'wechat', name: '微信零钱', category: 'cash', institution: '微信', tags: [], archived: false, order: 0, createdAt: 0, updatedAt: 0 },
   { id: 'alipay', name: '支付宝', category: 'cash', institution: '支付宝', tags: [], archived: false, order: 1, createdAt: 0, updatedAt: 0 },
   { id: 'cmb', name: '招商银行', category: 'cash', institution: '招商银行', tags: [], archived: false, order: 2, createdAt: 0, updatedAt: 0 },
+  { id: 'abc-cash', name: '农行现金', category: 'cash', institution: '中国农业银行', tags: [], archived: false, order: 3, createdAt: 0, updatedAt: 0 },
+  { id: 'abc-bond', name: '农行理财', category: 'bond', institution: '中国农业银行', tags: [], archived: false, order: 4, createdAt: 0, updatedAt: 0 },
 ]
 
 describe('parseTextAmounts', () => {
@@ -39,5 +41,29 @@ describe('matchAccount', () => {
       accounts,
     )
     expect(id).toBe('cmb')
+  })
+
+  it('maps a bank category total to 农行现金 / 农行理财', () => {
+    const cash = matchAccount(
+      { label: '活期', section: '现金', isTotal: true, amount: 8855, currency: 'CNY', confidence: 0.95 },
+      { kind: 'bank', institution: '中国农业银行' },
+      accounts,
+    )
+    const bond = matchAccount(
+      { label: '理财', section: '理财', isTotal: true, amount: 42366, currency: 'CNY', confidence: 0.95 },
+      { kind: 'bank', institution: '中国农业银行' },
+      accounts,
+    )
+    expect(cash).toBe('abc-cash')
+    expect(bond).toBe('abc-bond')
+  })
+
+  it('suggests default account names from institution + section', () => {
+    const suggestion = suggestAccount(
+      { label: '活期', section: '现金', isTotal: true, amount: 8855, currency: 'CNY', confidence: 0.95 },
+      { kind: 'bank', institution: '中国农业银行' },
+      accounts,
+    )
+    expect(suggestion).toMatchObject({ name: '农行现金', category: 'cash' })
   })
 })

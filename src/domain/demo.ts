@@ -1,35 +1,30 @@
-import { CATEGORIES, DEFAULT_INVESTMENT_CATEGORIES } from './categories'
+import { ALLOCATION_CATEGORY_KEYS, CATEGORIES, DEFAULT_INVESTMENT_CATEGORIES } from './categories'
+import { createDefaultAccounts } from './defaults'
 import { roundMoney } from './money'
 import { monthKey, shiftMonth } from './selectors'
-import type { Account, LedgerV2, MonthFlow, Snapshot } from './types'
+import type { LedgerV2, MonthFlow, Snapshot } from './types'
 
-interface DemoAccountSeed {
-  name: string
-  category: Account['category']
-  institution?: string
-  start: number
-  growth?: number
-  share?: number
+const START: Record<string, number> = {
+  微信零钱: 20000,
+  农行现金: 8000,
+  中行现金: 15000,
+  招行现金: 100000,
+  余额宝: 25000,
+  招行储蓄: 80000,
+  农行理财: 42000,
+  招行理财: 60000,
+  中行理财: 30000,
+  基金: 150000,
+  股票: 250000,
 }
 
-const DEMO_ACCOUNTS: DemoAccountSeed[] = [
-  { name: '招商银行', category: 'cash', institution: '招商银行', start: 100000, share: 0.58 },
-  { name: '微信零钱', category: 'cash', institution: '微信', start: 20000, share: 0.12 },
-  { name: '支付宝', category: 'cash', institution: '支付宝', start: 15000, share: 0.1 },
-  { name: '余额宝', category: 'cash', institution: '支付宝', start: 25000, share: 0.2 },
-  { name: 'A股', category: 'stock', start: 120000, growth: 0.008 },
-  { name: '港股', category: 'stock', start: 60000, growth: 0.006 },
-  { name: '美股', category: 'stock', start: 40000, growth: 0.01 },
-  { name: '指数基金', category: 'fund', start: 90000, growth: 0.005 },
-  { name: '主动基金', category: 'fund', start: 60000, growth: 0.004 },
-  { name: '银行理财', category: 'bond', start: 100000, growth: 0.003 },
-  { name: '国债', category: 'bond', start: 50000, growth: 0.002 },
-  { name: '自住房产', category: 'property', start: 1800000 },
-  { name: '年金险', category: 'insurance', start: 200000, growth: 0.001 },
-  { name: 'BTC', category: 'crypto', start: 50000, growth: 0.012 },
-  { name: 'ETH', category: 'crypto', start: 30000, growth: 0.009 },
-  { name: '应收款', category: 'other', start: 12000 },
-]
+const GROWTH: Record<string, number> = {
+  农行理财: 0.003,
+  招行理财: 0.0026,
+  中行理财: 0.0034,
+  基金: 0.006,
+  股票: 0.008,
+}
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0
@@ -48,8 +43,8 @@ export interface DemoOptions {
 }
 
 /**
- * 构造 12 个月的演示数据：工资、转入投资、投资收益率、消费都按公式自洽，
- * 这样预览里的"净开销"卡片和报表不会出现奇怪数字。
+ * 演示数据：使用用户期望的默认账户结构，只有现金/储蓄/理财/基金/股票 5 类。
+ * 工资、消费、投资收益按公式自洽，方便在预览里检查净开销和配置图。
  */
 export function buildDemoLedger(options: DemoOptions = {}): LedgerV2 {
   const now = options.now ?? new Date()
@@ -59,35 +54,23 @@ export function buildDemoLedger(options: DemoOptions = {}): LedgerV2 {
   for (let i = months - 1; i >= 0; i -= 1) keys.push(shiftMonth(endKey, -i))
 
   const random = mulberry32(20261106)
-  const accounts: Account[] = DEMO_ACCOUNTS.map((seed, index) => ({
-    id: `demo_${index}`,
-    name: seed.name,
-    category: seed.category,
-    institution: seed.institution,
-    tags: seed.category === 'cash' ? ['流动资金'] : seed.category === 'property' ? ['长期'] : [],
-    archived: false,
-    order: index,
-    createdAt: now.getTime(),
-    updatedAt: now.getTime(),
-  }))
+  const accounts = createDefaultAccounts(now.getTime())
   const byName = new Map(accounts.map((account) => [account.name, account]))
-
-  const cashAccounts = accounts.filter((a) => a.category === 'cash')
-  const cashShares = DEMO_ACCOUNTS.filter((s) => s.category === 'cash').map((s) => s.share ?? 0.25)
-  const investAccounts = accounts.filter((a) =>
-    DEFAULT_INVESTMENT_CATEGORIES.includes(a.category),
-  )
-  const otherAccounts = accounts.filter(
-    (a) => a.category !== 'cash' && !DEFAULT_INVESTMENT_CATEGORIES.includes(a.category),
-  )
-
   const values = new Map<string, number>()
-  for (const seed of DEMO_ACCOUNTS) {
-    const account = byName.get(seed.name)
-    if (account) values.set(account.id, seed.start)
+  for (const account of accounts) {
+    values.set(account.id, roundMoney(START[account.name] ?? 0))
   }
 
-  let cashTotal = cashAccounts.reduce((sum, a) => sum + (values.get(a.id) ?? 0), 0)
+  const cashAccounts = accounts.filter((account) => account.category === 'cash')
+  const savingsAccounts = accounts.filter((account) => account.category === 'savings')
+  const investAccounts = accounts.filter((account) =>
+    DEFAULT_INVESTMENT_CATEGORIES.includes(account.category),
+  )
+  const startCash = cashAccounts.reduce((sum, account) => sum + (values.get(account.id) ?? 0), 0)
+  const cashShares = cashAccounts.map(
+    (account) => (values.get(account.id) ?? 0) / (startCash || 1),
+  )
+  let cashTotal = startCash
 
   const flows: Record<string, MonthFlow> = {}
   const snapshots: Snapshot[] = []
@@ -99,30 +82,29 @@ export function buildDemoLedger(options: DemoOptions = {}): LedgerV2 {
     const transfer = index === 2 || index === 7 ? 5000 : 0
 
     if (index > 0) {
-      // 投资类按月收益
-      for (const seed of DEMO_ACCOUNTS) {
-        if (!seed.growth) continue
-        const account = byName.get(seed.name)
-        if (!account) continue
+      for (const account of investAccounts) {
+        const growth = GROWTH[account.name] ?? 0
+        if (growth === 0) continue
         const current = values.get(account.id) ?? 0
-        const noise = 1 + (random() - 0.5) * 0.012
-        values.set(account.id, roundMoney(current * (1 + (seed.growth ?? 0) * noise)))
+        const noise = 0.65 + random() * 0.7
+        values.set(account.id, roundMoney(current * (1 + growth * noise)))
       }
-      // 现金：工资 − 消费 − 转入 + 少量利息
-      cashTotal = cashTotal + salary - spending - transfer + cashTotal * 0.0004
+      for (const account of savingsAccounts) {
+        const current = values.get(account.id) ?? 0
+        values.set(account.id, roundMoney(current * (1 + 0.002 * (0.8 + random() * 0.4))))
+      }
+      cashTotal = roundMoney(cashTotal + salary - spending - transfer + cashTotal * 0.0003)
       if (cashTotal < 0) cashTotal = 0
+      const noise = cashShares.map((share) => share * (0.97 + random() * 0.06))
+      const noiseSum = noise.reduce((sum, value) => sum + value, 0)
+      cashAccounts.forEach((account, accountIndex) => {
+        const share = noise[accountIndex] / noiseSum
+        values.set(account.id, roundMoney(cashTotal * share))
+      })
     }
 
-    // 把现金总量分配到现金账户
-    const cashNoise = cashShares.map((share) => share * (0.97 + random() * 0.06))
-    const cashNoiseSum = cashNoise.reduce((sum, v) => sum + v, 0)
-    cashAccounts.forEach((account, accountIndex) => {
-      const share = cashNoise[accountIndex] / cashNoiseSum
-      values.set(account.id, roundMoney(cashTotal * share))
-    })
-
     if (transfer > 0) {
-      const target = byName.get('A股')
+      const target = byName.get('股票')
       if (target) values.set(target.id, roundMoney((values.get(target.id) ?? 0) + transfer))
     }
 
@@ -156,6 +138,7 @@ export function buildDemoLedger(options: DemoOptions = {}): LedgerV2 {
       hideAmounts: false,
       defaultSalary: 25000,
       investmentCategories: [...DEFAULT_INVESTMENT_CATEGORIES],
+      allocationCategories: [...ALLOCATION_CATEGORY_KEYS],
       lastTab: 'overview',
       remindEntry: true,
     },
@@ -164,5 +147,5 @@ export function buildDemoLedger(options: DemoOptions = {}): LedgerV2 {
 }
 
 export function demoCategoryCoverage(): string[] {
-  return CATEGORIES.map((c) => c.key)
+  return CATEGORIES.map((category) => category.key)
 }

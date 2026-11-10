@@ -1,8 +1,9 @@
 export type CategoryKey =
   | 'cash'
-  | 'stock'
-  | 'fund'
+  | 'savings'
   | 'bond'
+  | 'fund'
+  | 'stock'
   | 'property'
   | 'insurance'
   | 'crypto'
@@ -54,6 +55,8 @@ export interface LedgerSettings {
   defaultSalary: number | null
   /** 计入"投资收益"估算的资产类别 */
   investmentCategories: CategoryKey[]
+  /** 总览资产配置展示的类别；其他类别有余额时合并为"其他" */
+  allocationCategories: CategoryKey[]
   lastTab: string
   remindEntry: boolean
 }

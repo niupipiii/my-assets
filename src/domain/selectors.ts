@@ -1,4 +1,4 @@
-import { CATEGORIES, CATEGORY_MAP, MONTH_NAMES } from './categories'
+import { ALLOCATION_CATEGORY_KEYS, CATEGORIES, CATEGORY_MAP, MONTH_NAMES, categoryOf } from './categories'
 import { formatMoney, formatPercent, formatSignedMoney, fromCents, round2, toCents } from './money'
 import type {
   Account,
@@ -307,17 +307,52 @@ export interface AllocationSlice {
 export function allocationOf(ledger: LedgerV2, key: string): AllocationSlice[] {
   const snapshot = getSnapshot(ledger, key)
   const totals = categoryTotalsOf(snapshot, ledger)
-  const totalCents = Object.values(totals).reduce((sum, v) => sum + toCents(v), 0)
-  return CATEGORIES.map((category) => {
-    const value = totals[category.key]
-    return {
-      category: category.key,
-      label: category.label,
-      color: category.color,
-      value,
-      share: totalCents > 0 ? toCents(value) / totalCents : 0,
+  const totalCents = Object.values(totals).reduce((sum, value) => sum + toCents(value), 0)
+  const visible =
+    ledger.settings.allocationCategories.length > 0
+      ? ledger.settings.allocationCategories
+      : ALLOCATION_CATEGORY_KEYS
+  const slices = visible
+    .map((category) => {
+      const value = totals[category] ?? 0
+      return {
+        category,
+        label: categoryOf(category).label,
+        color: categoryOf(category).color,
+        value,
+        share: totalCents > 0 ? toCents(value) / totalCents : 0,
+      }
+    })
+    .filter((slice) => slice.value !== 0)
+
+  const visibleCents = visible.reduce((sum, category) => sum + toCents(totals[category] ?? 0), 0)
+  const hiddenCents = totalCents - visibleCents
+  if (hiddenCents !== 0) {
+    const existing = slices.find((slice) => slice.category === 'other')
+    if (existing) {
+      existing.value = fromCents(toCents(existing.value) + hiddenCents)
+      existing.share = totalCents > 0 ? toCents(existing.value) / totalCents : 0
+    } else {
+      slices.push({
+        category: 'other',
+        label: '其他',
+        color: CATEGORY_MAP.other.color,
+        value: fromCents(hiddenCents),
+        share: totalCents > 0 ? hiddenCents / totalCents : 0,
+      })
     }
-  }).filter((slice) => slice.value !== 0)
+  }
+  return slices
+}
+
+/** 记账/账户页展示的分类：5 个主分类 + 当前有账户的分类；可选的归档分类用于历史。 */
+export function displayCategories(ledger: LedgerV2, includeArchived = false) {
+  const used = new Set(
+    ledger.accounts
+      .filter((account) => includeArchived || !account.archived)
+      .map((account) => account.category),
+  )
+  return CATEGORIES.filter((category) => category.primary || used.has(category.key))
 }
 
 export interface MonthSeriesPoint {

@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
 import { CATEGORIES, categoryOf } from '../../domain/categories'
-import { latestSnapshot } from '../../domain/selectors'
+import { displayCategories, latestSnapshot } from '../../domain/selectors'
 import { formatMoney, parseAmount } from '../../domain/money'
 import type { Account, CategoryKey } from '../../domain/types'
 import { useLedger, useLedgerActions } from '../../store/LedgerProvider'
 import { useToast } from '../../components/Toast'
 import { Sheet } from '../../components/Sheet'
 import { CategoryIcon } from '../../components/CategoryIcon'
+import { backupLedger } from '../../store/storage'
 
 interface Draft {
   name: string
@@ -152,7 +153,7 @@ export function AccountsScreen({ open, onClose }: { open: boolean; onClose: () =
             </div>
           </div>
         )}
-        {CATEGORIES.map((category) => {
+        {displayCategories(ledger, showArchived).map((category) => {
           const accounts = visible
             .filter((account) => account.category === category.key)
             .sort((a, b) => a.order - b.order)
@@ -193,8 +194,21 @@ export function AccountsScreen({ open, onClose }: { open: boolean; onClose: () =
           )
         })}
 
-        <p className="tiny faint" style={{ margin: '18px 4px 0', lineHeight: 1.5 }}>
-          改名不会影响历史记录；有余额的账户只能归档，不能直接删除。点右上角漏斗显示/隐藏已归档。
+        <button
+          className="btn"
+          style={{ width: '100%', marginTop: 16 }}
+          onClick={() => {
+            if (!window.confirm('会创建缺失的默认账户，并把余额宝归到储蓄；不会删除或归档现有账户。继续？')) return
+            backupLedger(ledger, 'manual')
+            const added = actions.ensureDefaultAccounts()
+            toast.show(added > 0 ? `已补齐 ${added} 个默认账户` : '默认账户已经齐全')
+          }}
+        >
+          补齐默认账户（现金 / 储蓄 / 理财 / 基金 / 股票）
+        </button>
+        <p className="tiny faint" style={{ margin: '10px 4px 0', lineHeight: 1.5 }}>
+          默认结构：微信零钱 / 农行现金 / 中行现金 / 招行现金；余额宝 / 招行储蓄；农行理财 / 招行理财 /
+          中行理财；基金；股票。改名不会影响历史记录；有余额的账户只能归档，不能直接删除。点右上角漏斗显示/隐藏已归档。
         </p>
       </Sheet>
 

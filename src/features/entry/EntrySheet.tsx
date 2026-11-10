@@ -119,6 +119,11 @@ export function EntrySheet({
       return orderA - orderB || a.order - b.order
     })
 
+  const categoriesForEntry = CATEGORIES.filter(
+    (category) =>
+      category.primary || entryAccounts.some((account) => account.category === category.key),
+  )
+
   const parsed = useMemo(() => {
     const balances: Record<string, number> = {}
     const invalid: string[] = []
@@ -475,7 +480,7 @@ export function EntrySheet({
           </div>
         )}
 
-        {CATEGORIES.map((category) => {
+        {categoriesForEntry.map((category) => {
           const accounts = entryAccounts.filter((account) => account.category === category.key)
           if (accounts.length === 0 && addingCategory !== category.key) {
             return (

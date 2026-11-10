@@ -1,4 +1,5 @@
 import { getSnapshot, monthKey, splitMonthKey } from '../domain/selectors'
+import { DEFAULT_ACCOUNTS, defaultAccountId } from '../domain/defaults'
 import { roundMoney } from '../domain/money'
 import type { Account, LedgerSettings, LedgerV2, MonthFlow, Snapshot } from '../domain/types'
 import { maybeDailyBackup, writeLedger } from './storage'
@@ -29,6 +30,7 @@ export interface LedgerActions {
   archiveAccount: (id: string, archived: boolean) => void
   deleteAccount: (id: string) => boolean
   moveAccount: (id: string, direction: -1 | 1) => void
+  ensureDefaultAccounts: () => number
   updateSettings: (patch: Partial<LedgerSettings>) => void
   importLedger: (ledger: LedgerV2, mode: 'replace' | 'merge') => void
 }
@@ -273,6 +275,49 @@ export function createLedgerStore(initial: LedgerV2, options: LedgerStoreOptions
           }),
         }
       })
+    },
+
+    ensureDefaultAccounts: () => {
+      let added = 0
+      commit((current) => {
+        const accounts = [...current.accounts]
+        const byName = new Map(accounts.map((account) => [account.name.trim(), account]))
+        DEFAULT_ACCOUNTS.forEach((seed, index) => {
+          const existing = byName.get(seed.name)
+          if (existing) {
+            const position = accounts.findIndex((account) => account.id === existing.id)
+            if (position >= 0) {
+              accounts[position] = {
+                ...existing,
+                category: seed.category,
+                institution: seed.institution ?? existing.institution,
+                archived: false,
+                order: index,
+                updatedAt: Date.now(),
+              }
+            }
+            return
+          }
+          let id = defaultAccountId(index)
+          if (accounts.some((account) => account.id === id)) id = createId('acc')
+          const account: Account = {
+            id,
+            name: seed.name,
+            category: seed.category,
+            institution: seed.institution,
+            tags: seed.tags ?? [],
+            archived: false,
+            order: index,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          }
+          accounts.push(account)
+          byName.set(seed.name, account)
+          added += 1
+        })
+        return { ...current, accounts }
+      })
+      return added
     },
 
     updateSettings: (patch) => {

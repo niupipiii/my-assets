@@ -46,7 +46,10 @@ const SettingsSchema = z.object({
   theme: z.enum(['system', 'light', 'dark']).default('system'),
   hideAmounts: z.boolean().default(false),
   defaultSalary: z.number().nullable().default(null),
-  investmentCategories: z.array(CategorySchema).default(['stock', 'fund', 'bond', 'crypto']),
+  investmentCategories: z.array(CategorySchema).default(['stock', 'fund', 'bond']),
+  allocationCategories: z
+    .array(CategorySchema)
+    .default(['cash', 'savings', 'bond', 'fund', 'stock']),
   lastTab: z.string().default('overview'),
   remindEntry: z.boolean().default(true),
 })
@@ -128,6 +131,9 @@ export function normalizeLedger(input: LedgerV2): { ledger: LedgerV2; warnings: 
   const investmentCategories = input.settings.investmentCategories.filter((category, index, list) =>
     CATEGORY_KEYS.includes(category) && list.indexOf(category) === index,
   )
+  const allocationCategories = input.settings.allocationCategories.filter((category, index, list) =>
+    CATEGORY_KEYS.includes(category) && list.indexOf(category) === index,
+  )
 
   return {
     ledger: {
@@ -142,7 +148,11 @@ export function normalizeLedger(input: LedgerV2): { ledger: LedgerV2; warnings: 
             ? null
             : roundMoney(input.settings.defaultSalary),
         investmentCategories:
-          investmentCategories.length > 0 ? investmentCategories : ['stock', 'fund', 'bond', 'crypto'],
+          investmentCategories.length > 0 ? investmentCategories : ['stock', 'fund', 'bond'],
+        allocationCategories:
+          allocationCategories.length > 0
+            ? allocationCategories
+            : ['cash', 'savings', 'bond', 'fund', 'stock'],
       },
     },
     warnings,

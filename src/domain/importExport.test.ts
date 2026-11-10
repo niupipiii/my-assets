@@ -17,6 +17,7 @@ const ledger: LedgerV2 = {
     hideAmounts: false,
     defaultSalary: 20000,
     investmentCategories: ['stock'],
+    allocationCategories: ['cash', 'savings', 'bond', 'fund', 'stock'],
     lastTab: 'overview',
     remindEntry: true,
   },

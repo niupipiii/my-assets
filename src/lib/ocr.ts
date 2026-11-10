@@ -4,6 +4,8 @@ import type { Account, CategoryKey } from '../domain/types'
 
 export interface OcrBalance {
   label: string
+  section?: string
+  isTotal?: boolean
   amount: number
   currency: string
   confidence: number
@@ -120,51 +122,114 @@ function normalize(text: string): string {
   return text.replace(/[\s\-_·]/g, '').toLowerCase()
 }
 
+export function categoryFromText(text: string): CategoryKey {
+  if (/活期|现金|零钱|存款|尾号/.test(text)) return 'cash'
+  if (/储蓄|余额宝/.test(text)) return 'savings'
+  if (/理财|定期/.test(text)) return 'bond'
+  if (/基金/.test(text)) return 'fund'
+  if (/股票|证券/.test(text)) return 'stock'
+  return 'other'
+}
+
+export function institutionShort(institution: string): string | undefined {
+  const text = normalize(institution)
+  if (!text) return undefined
+  if (/农业银行|农行/.test(text)) return '农行'
+  if (/招商银行|招行/.test(text)) return '招行'
+  if (/中国银行|中行/.test(text)) return '中行'
+  if (/建设银行|建行/.test(text)) return '建行'
+  if (/工商银行|工行/.test(text)) return '工行'
+  if (/交通银行|交行/.test(text)) return '交行'
+  if (/微信/.test(text)) return '微信'
+  if (/支付宝/.test(text)) return '支付宝'
+  return undefined
+}
+
+export interface AccountSuggestion {
+  category: CategoryKey
+  name: string
+  institution?: string
+}
+
+/** 根据机构 + 一级分类给出默认账户名，例如 农行 + 现金 → 农行现金。 */
+export function suggestAccount(
+  balance: OcrBalance,
+  result: Pick<OcrResult, 'kind' | 'institution'>,
+  accounts: Account[],
+): AccountSuggestion | undefined {
+  const text = `${result.institution} ${balance.section ?? ''} ${balance.label}`
+  const category = categoryFromText(text)
+  const short = institutionShort(result.institution)
+  const label = balance.label.trim()
+
+  if (/微信|零钱/.test(text) && category === 'cash') {
+    return { category: 'cash', name: '微信零钱', institution: '微信' }
+  }
+  if (/余额宝/.test(text)) {
+    return { category: 'savings', name: '余额宝', institution: '支付宝' }
+  }
+  if (short) {
+    if (category === 'cash') {
+      return { category, name: `${short}现金`, institution: result.institution }
+    }
+    if (category === 'savings') {
+      return { category, name: `${short}储蓄`, institution: result.institution }
+    }
+    if (category === 'bond') {
+      return { category, name: `${short}理财`, institution: result.institution }
+    }
+  }
+  if (category === 'fund') return { category, name: '基金', institution: result.institution }
+  if (category === 'stock') return { category, name: '股票', institution: result.institution }
+  if (category === 'cash' && label) return { category, name: label, institution: result.institution }
+  if (category === 'savings' && label) return { category, name: label, institution: result.institution }
+  if (category === 'bond' && label) return { category, name: label, institution: result.institution }
+
+  const exact = accounts.find((account) => !account.archived && normalize(account.name) === normalize(label))
+  if (exact) return { category: exact.category, name: exact.name, institution: exact.institution }
+  return label ? { category, name: label, institution: result.institution } : undefined
+}
+
 /** 根据机构/关键词把识别结果匹配到已有账户，返回账户 id。 */
 export function matchAccount(
   balance: OcrBalance,
   result: Pick<OcrResult, 'kind' | 'institution'>,
   accounts: Account[],
 ): string | undefined {
-  const institution = normalize(result.institution)
-  const label = normalize(balance.label)
   const candidates = accounts.filter((account) => !account.archived)
-  let best: { id: string; score: number } | undefined
+  const suggestion = suggestAccount(balance, result, candidates)
+  if (!suggestion) return undefined
 
-  for (const account of candidates) {
-    const accountInstitution = normalize(account.institution ?? '')
-    const accountName = normalize(account.name)
-    let score = 0
+  const exact = candidates.find((account) => normalize(account.name) === normalize(suggestion.name))
+  if (exact) return exact.id
 
-    if (institution && accountInstitution && (accountInstitution.includes(institution) || institution.includes(accountInstitution))) {
-      score += 5
-    }
-    if (institution && accountName.includes(institution)) score += 3
+  const contains = candidates.find((account) => {
+    const name = normalize(account.name)
+    const target = normalize(suggestion.name)
+    return name.includes(target) || target.includes(name)
+  })
+  if (contains) return contains.id
 
-    if (result.kind === 'wechat') {
-      if (accountInstitution.includes('微信') || accountName.includes('微信')) score += 4
-    } else if (result.kind === 'alipay') {
-      if (
-        accountInstitution.includes('支付宝') ||
-        accountName.includes('支付宝') ||
-        accountName.includes('余额宝')
-      ) {
-        score += 4
-      }
-    } else if (result.kind === 'bank') {
-      if (account.category === 'cash') score += 1
-    }
-
-    if (label) {
-      if (accountName === label) score += 4
-      else if (accountName.includes(label) || label.includes(accountName)) score += 2
-    }
-
-    if (balance.label && account.category === 'cash' && result.kind !== 'bank') score += 0.5
-    if (score > 0 && (!best || score > best.score)) best = { id: account.id, score }
+  const short = institutionShort(result.institution)
+  const sameCategory = candidates.filter((account) => account.category === suggestion.category)
+  if (short) {
+    const byInstitution = sameCategory.find((account) => {
+      const institution = normalize(account.institution ?? '')
+      return institution.includes(short) || (account.name.includes(short) && account.category === suggestion.category)
+    })
+    if (byInstitution) return byInstitution.id
   }
+  if (sameCategory.length === 1) return sameCategory[0].id
 
-  return best?.id
+  const label = normalize(balance.label)
+  if (label) {
+    const byLabel = candidates.find(
+      (account) =>
+        normalize(account.name).includes(label) || label.includes(normalize(account.name)),
+    )
+    if (byLabel) return byLabel.id
+  }
+  return undefined
 }
 
 export interface TextCandidate {

@@ -19,6 +19,7 @@ function makeLedger(overrides: Partial<LedgerV2['settings']> = {}): LedgerV2 {
       hideAmounts: false,
       defaultSalary: null,
       investmentCategories: ['stock'],
+      allocationCategories: ['cash', 'savings', 'bond', 'fund', 'stock'],
       lastTab: 'overview',
       remindEntry: true,
       ...overrides,
