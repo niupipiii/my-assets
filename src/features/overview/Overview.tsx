@@ -71,9 +71,6 @@ export function Overview({
       <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10, marginBottom: 14 }}>
         <div>
           <h1 className="large-title">资产全景</h1>
-          <p className="page-subtitle">
-            {now.getFullYear()}年{now.getMonth() + 1}月{now.getDate()}日 · 只存在这台手机上
-          </p>
         </div>
         <button
           className="pill"
