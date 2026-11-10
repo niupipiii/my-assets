@@ -32,14 +32,8 @@ const PROMPT = `你是个人资产截图的信息提取器。用户只需要"分
 3. 不要返回全局"总资产 / 总负债 / 资产总额 / 负债总额 / 资产合计 / 汇总 / 总计"行；除非整张图只有这一个数字（作为兜底）。
 4. 同一个金额在汇总行和账户行重复出现时只返回一次，优先分类合计行。例：活期 8,855.09 和 尾号6777 8,855.09 只返回一条。
 5. label 用分类名或账户名；section 用一级分类：现金 / 储蓄 / 理财 / 基金 / 股票 / 其他；isTotal 标记是否是分类合计。
-6. 先根据页面结构识别来源机构（这是用户每月固定上传的 6 类截图），按下面的特征判断，不要凭配色猜：
-   - 东方财富：橙色头部，出现 东方财富 / 总资产 / 证券市值 / 持仓 / 可用 → institution=东方财富，只返回一条 股票=总资产。
-   - 中国银行：顶部"资产管理"、"我的资产"，分组"活钱管理 / 稳健投资 / 进取投资 / 保险保障" → institution=中国银行。
-   - 招商银行：顶部"账户总览"，有"活钱 / 投资"分组；"活钱"下有 直接可用 / 快速赎回 / 日日宝 / 朝朝盈；"投资"下有 存款 / 理财；理财产品名可能出现"光大理财"，不要据此判为光大银行 → institution=招商银行。招商银行必须返回 活钱、存款、理财 三条（存款通常是定期/大额存单），不能只返回活钱和理财。
-   - 微信：顶部"钱包"，出现 零钱 / 零钱通 / 银行卡 → institution=微信。
-   - 支付宝：出现 余额宝 / 基金 / 余额 / 定期 / 总资产 → institution=支付宝。
-   - 中国农业银行：顶部"资产负债"，出现 活期 / 理财 / 农银理财 → institution=中国农业银行。
-   以上特征都不匹配时才留空 institution，并降低 confidence。
+6. 不用猜银行名：截图可能没有清晰的银行名称/Logo。institution 可以留空或写可见名称，服务端会按 label 判断来源；不要把理财产品名当银行名。
+   特别规则：证券/股票 App 只返回一条 股票=总资产；招商银行必须返回 活钱、存款、理财 三条；其他银行按“一级分类合计”提取。
 7. amount 纯数字，不带货币符号、千分位、单位；人民币为正数。
 8. 证券/股票 App（东方财富、证券、持仓、总资产、证券市值、可用）：只返回一条 {"label":"股票","section":"股票","isTotal":true,"amount":总资产}；看不到总资产时才用证券市值。不要返回 证券市值/可用/可取/持仓明细。
 9. 一级分类映射：活期/活钱/活钱管理/零钱 → 现金；储蓄/存款/定期/余额宝/零钱通 → 储蓄；理财/稳健投资 → 理财；基金 → 基金；股票/证券 → 股票。
@@ -431,27 +425,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             (balance) => balance.label.includes(item.label) || item.label.includes(balance.label),
           ),
       )
-      for (const item of missing.slice(0, 2)) {
-        try {
-          const known = finalBalances.map((balance) => balance.label).join('、') || '无'
-          const repairPrompt = `这是${signature}的资产截图。上一轮已经识别到：${known}。请只提取「${item.label}」这一项的当前合计金额（section=${item.section}，isTotal=true），不要返回其他项目，不要返回总资产。输出 JSON：{"institution":"${signature}","balances":[{"label":"${item.label}","section":"${item.section}","isTotal":true,"amount":0,"currency":"CNY","confidence":0.9,"evidence":""}]}。如果确实没有这一项，balances 返回空数组。`
-          const repairRaw = await callProvider(baseUrl, apiKey, model, image, true, repairPrompt)
-          const repair = ResultSchema.safeParse(repairRaw)
-          if (!repair.success) continue
-          for (const balance of repair.data.balances) {
-            const normalized = normalizeBalance(balance)
-            if (!normalized) continue
-            if (
-              !finalBalances.some(
-                (existing) =>
-                  existing.label === normalized.label && existing.amount === normalized.amount,
-              )
-            ) {
-              finalBalances.push({ ...normalized, isTotal: true })
-            }
+      const repairResults = await Promise.all(
+        missing.slice(0, 2).map(async (item) => {
+          try {
+            const known = finalBalances.map((balance) => balance.label).join('、') || '无'
+            const repairPrompt = `这是${signature}的资产截图。上一轮已经识别到：${known}。请只提取「${item.label}」这一项的当前合计金额（section=${item.section}，isTotal=true），不要返回其他项目，不要返回总资产。输出 JSON：{"institution":"${signature}","balances":[{"label":"${item.label}","section":"${item.section}","isTotal":true,"amount":0,"currency":"CNY","confidence":0.9,"evidence":""}]}。如果确实没有这一项，balances 返回空数组。`
+            const repairRaw = await callProvider(baseUrl, apiKey, model, image, true, repairPrompt)
+            const repair = ResultSchema.safeParse(repairRaw)
+            if (!repair.success) return []
+            return repair.data.balances
+              .map(normalizeBalance)
+              .filter((balance): balance is NormalizedBalance => balance !== null)
+          } catch {
+            return []
           }
-        } catch {
-          // 补提取是尽力而为，不阻塞整张图
+        }),
+      )
+      for (const normalized of repairResults.flat()) {
+        if (
+          !finalBalances.some(
+            (existing) =>
+              existing.label === normalized.label && existing.amount === normalized.amount,
+          )
+        ) {
+          finalBalances.push({ ...normalized, isTotal: true })
         }
       }
       signature = signatureInstitution(finalBalances.map((balance) => balance.label))

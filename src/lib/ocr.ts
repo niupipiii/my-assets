@@ -29,15 +29,27 @@ export class OcrError extends Error {
 }
 
 export async function recognizeImage(image: string, token: string, signal?: AbortSignal): Promise<OcrResult> {
-  const response = await fetch('/api/ocr', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-ocr-token': token,
-    },
-    body: JSON.stringify({ image, locale: 'zh-CN' }),
-    signal,
-  })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 75_000)
+  let response: Response
+  try {
+    response = await fetch('/api/ocr', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-ocr-token': token,
+      },
+      body: JSON.stringify({ image, locale: 'zh-CN' }),
+      signal: signal ?? controller.signal,
+    })
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') {
+      throw new OcrError('识别超时，请重试或减少图片数量', 'timeout')
+    }
+    throw error
+  } finally {
+    clearTimeout(timer)
+  }
   let payload: {
     ok?: boolean
     data?: OcrResult
@@ -86,7 +98,7 @@ export async function compressImage(file: File): Promise<string> {
   try {
     const image = await loadImage(objectUrl)
     const longest = Math.max(image.naturalWidth, image.naturalHeight)
-    const maxSide = 2560
+    const maxSide = 2048
     const scale = longest > maxSide ? maxSide / longest : 1
     const width = Math.max(1, Math.round(image.naturalWidth * scale))
     const height = Math.max(1, Math.round(image.naturalHeight * scale))
@@ -98,7 +110,7 @@ export async function compressImage(file: File): Promise<string> {
     context.fillStyle = '#ffffff'
     context.fillRect(0, 0, width, height)
     context.drawImage(image, 0, 0, width, height)
-    let dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+    let dataUrl = canvas.toDataURL('image/jpeg', 0.82)
     if (dataUrl.length > 2_800_000) {
       const smaller = document.createElement('canvas')
       const nextScale = Math.min(1, 1600 / Math.max(width, height))

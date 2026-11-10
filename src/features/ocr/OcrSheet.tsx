@@ -207,23 +207,27 @@ export function OcrSheet({
     setBusy(true)
     setError(null)
     setItems([])
-    const collected: Item[] = []
-    let failed = 0
-    let firstError = ''
+    const results: Array<Item[] | null> = new Array(images.length).fill(null)
+    const errors: string[] = []
+    let completed = 0
     try {
-      for (let index = 0; index < images.length; index += 1) {
-        setProgress(`识别第 ${index + 1}/${images.length} 张…`)
-        const image = images[index]
-        try {
-          const result = await recognizeImage(image.dataUrl, token)
-          collected.push(...itemsFromResult(result, `图 ${index + 1}`))
-        } catch (recognizeError) {
-          failed += 1
-          if (!firstError) {
-            firstError = recognizeError instanceof Error ? recognizeError.message : '识别失败'
+      const concurrency = Math.min(3, images.length)
+      const worker = async (start: number) => {
+        for (let index = start; index < images.length; index += concurrency) {
+          try {
+            const result = await recognizeImage(images[index].dataUrl, token)
+            results[index] = itemsFromResult(result, `图 ${index + 1}`)
+          } catch (recognizeError) {
+            errors.push(recognizeError instanceof Error ? recognizeError.message : '识别失败')
           }
+          completed += 1
+          setProgress(`已完成 ${completed}/${images.length} 张…`)
         }
       }
+      await Promise.all(Array.from({ length: concurrency }, (_, start) => worker(start)))
+      const collected = results.flatMap((items) => items ?? [])
+      const failed = errors.length
+      const firstError = errors[0] ?? ''
       if (collected.length === 0) {
         setError(firstError || '没有识别到余额。可以换一张更清晰、只包含余额区域的截图，或用"粘贴文字"兜底。')
       } else {
