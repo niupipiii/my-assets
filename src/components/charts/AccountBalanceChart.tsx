@@ -1,14 +1,13 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { CATEGORIES, categoryOf } from '../../domain/categories'
 import {
   categoryTotalOf,
   getSnapshot,
   monthLabel,
-  prevMonthKey,
   shortMonthLabel,
   shiftMonth,
 } from '../../domain/selectors'
-import { formatCompact, formatSignedMoney } from '../../domain/money'
+import { formatCompact, formatMoney } from '../../domain/money'
 import type { LedgerV2 } from '../../domain/types'
 
 interface Point {
@@ -16,8 +15,9 @@ interface Point {
   values: number[]
 }
 
-export function AccountChangeChart({ ledger, month }: { ledger: LedgerV2; month: string }) {
+export function AccountBalanceChart({ ledger, month }: { ledger: LedgerV2; month: string }) {
   const count = 12
+  const [hidden, setHidden] = useState<Set<string>>(new Set())
   const keys = useMemo(
     () => Array.from({ length: count }, (_, index) => shiftMonth(month, index - count + 1)),
     [month],
@@ -33,20 +33,14 @@ export function AccountChangeChart({ ledger, month }: { ledger: LedgerV2; month:
       ),
     [keys, snapshots, ledger],
   )
-
   const points: Point[] = useMemo(
     () =>
       keys.map((key) => {
         const snapshot = snapshots.get(key)
-        const previous = getSnapshot(ledger, prevMonthKey(key))
-        const values = categories.map((category) => {
-          if (!snapshot || !previous) return 0
-          return (
-            categoryTotalOf(snapshot, ledger, category.key) -
-            categoryTotalOf(previous, ledger, category.key)
-          )
-        })
-        return { key, values }
+        return {
+          key,
+          values: categories.map((category) => categoryTotalOf(snapshot, ledger, category.key)),
+        }
       }),
     [keys, snapshots, categories, ledger],
   )
@@ -54,18 +48,13 @@ export function AccountChangeChart({ ledger, month }: { ledger: LedgerV2; month:
   const current = points[points.length - 1]
   const currentValues = current?.values ?? []
   const allValues = points.flatMap((point) => point.values)
-  let dataMin = Math.min(0, ...allValues)
-  let dataMax = Math.max(0, ...allValues)
-  if (dataMin === dataMax) {
-    dataMin = -1
-    dataMax = 1
-  }
-  const padding = Math.max(1, (dataMax - dataMin) * 0.12)
-  const min = dataMin - padding
-  const max = dataMax + padding
+  const dataMax = Math.max(0, ...allValues)
+  const max = dataMax > 0 ? dataMax * 1.08 : 1
+  const min = 0
+  const ticks = [max, max / 2, 0]
 
   if (categories.length === 0) {
-    return <div className="small faint" style={{ padding: '12px 0' }}>还没有可展示的账户变化</div>
+    return <div className="small faint" style={{ padding: '12px 0' }}>还没有可展示的账户余额</div>
   }
 
   const width = 360
@@ -78,7 +67,15 @@ export function AccountChangeChart({ ledger, month }: { ledger: LedgerV2; month:
   const plotHeight = height - top - bottom
   const xFor = (index: number) => left + (index / (count - 1)) * plotWidth
   const yFor = (value: number) => top + plotHeight - ((value - min) / (max - min)) * plotHeight
-  const ticks = [...new Set([max, 0, min])]
+
+  const toggle = (key: string) => {
+    setHidden((previous) => {
+      const next = new Set(previous)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   return (
     <div>
@@ -87,7 +84,7 @@ export function AccountChangeChart({ ledger, month }: { ledger: LedgerV2; month:
         viewBox={`0 0 ${width} ${height}`}
         style={{ display: 'block' }}
         role="img"
-        aria-label="一级账户月度绝对值变化折线图"
+        aria-label="一级账户每月余额绝对值曲线"
       >
         {ticks.map((tick) => (
           <g key={tick}>
@@ -114,6 +111,7 @@ export function AccountChangeChart({ ledger, month }: { ledger: LedgerV2; month:
         ))}
 
         {categories.map((category, categoryIndex) => {
+          if (hidden.has(category.key)) return null
           const color = categoryOf(category.key).color
           const pointsString = points
             .map((point, index) => `${xFor(index)},${yFor(point.values[categoryIndex] ?? 0)}`)
@@ -142,8 +140,8 @@ export function AccountChangeChart({ ledger, month }: { ledger: LedgerV2; month:
                     strokeWidth={isSelected ? 1 : 0.5}
                   >
                     <title>
-                      {`${monthLabel(point.key)} · ${categoryOf(category.key).label} · 较上月 ${
-                        ledger.settings.hideAmounts ? '••••' : formatSignedMoney(value)
+                      {`${monthLabel(point.key)} · ${categoryOf(category.key).label} · ${
+                        ledger.settings.hideAmounts ? '••••' : formatMoney(value)
                       }`}
                     </title>
                   </circle>
@@ -170,7 +168,7 @@ export function AccountChangeChart({ ledger, month }: { ledger: LedgerV2; month:
       </svg>
 
       <div className="tiny faint" style={{ marginTop: 1 }}>
-        每个一级账户每月较上月的绝对增减（元）
+        每个一级账户每月的余额绝对值（元）· 点击图例筛选
       </div>
 
       <div
@@ -185,8 +183,29 @@ export function AccountChangeChart({ ledger, month }: { ledger: LedgerV2; month:
       >
         {categories.map((category, index) => {
           const value = currentValues[index] ?? 0
+          const dimmed = hidden.has(category.key)
           return (
-            <div key={category.key} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <button
+              key={category.key}
+              type="button"
+              onClick={() => toggle(category.key)}
+              aria-pressed={!dimmed}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                minWidth: 0,
+                padding: 3,
+                margin: -3,
+                border: 0,
+                borderRadius: 7,
+                background: 'none',
+                color: 'inherit',
+                cursor: 'pointer',
+                opacity: dimmed ? 0.35 : 1,
+                textAlign: 'left',
+              }}
+            >
               <span
                 style={{
                   width: 8,
@@ -208,20 +227,10 @@ export function AccountChangeChart({ ledger, month }: { ledger: LedgerV2; month:
               >
                 {category.label}
               </span>
-              <span
-                className="money tiny"
-                style={{
-                  color: value === 0 ? 'var(--text-3)' : value > 0 ? 'var(--green)' : 'var(--red)',
-                  fontWeight: 650,
-                }}
-              >
-                {ledger.settings.hideAmounts
-                  ? '••••'
-                  : value === 0
-                    ? '¥0'
-                    : formatSignedMoney(value)}
+              <span className="money tiny" style={{ color: 'var(--text-2)', fontWeight: 650 }}>
+                {ledger.settings.hideAmounts ? '••••' : formatMoney(value)}
               </span>
-            </div>
+            </button>
           )
         })}
       </div>

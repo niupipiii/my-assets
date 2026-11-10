@@ -18,17 +18,15 @@ import { EmptyState } from '../../components/EmptyState'
 import { CategoryIcon } from '../../components/CategoryIcon'
 import { MiniBars } from '../../components/charts/MiniBars'
 import { AccountStackChart } from '../../components/charts/AccountStackChart'
-import { AccountChangeChart } from '../../components/charts/AccountChangeChart'
+import { AccountBalanceChart } from '../../components/charts/AccountBalanceChart'
 import { shareMonthReport } from '../../lib/shareReport'
 
 export function ReportsScreen({
   month,
   onPickMonth,
-  onSelectMonth,
 }: {
   month: string
   onPickMonth: () => void
-  onSelectMonth: (key: string) => void
 }) {
   const ledger = useLedger()
   const toast = useToast()
@@ -189,10 +187,10 @@ export function ReportsScreen({
 
             <section className="card" style={{ marginTop: 12 }}>
               <div className="section-title" style={{ margin: 0, marginBottom: 8 }}>
-                一级账户月度变化
-                <span className="tiny faint">绝对值 · 较上月</span>
+                一级账户余额趋势
+                <span className="tiny faint">每月余额 · 点击图例筛选</span>
               </div>
-              <AccountChangeChart ledger={ledger} month={month} />
+              <AccountBalanceChart ledger={ledger} month={month} />
             </section>
           </>
         )
@@ -209,10 +207,6 @@ export function ReportsScreen({
           yearSeries={yearSeries}
           startSnapshot={yearStartSnapshot}
           endSnapshot={yearEndSnapshot}
-          onSelectMonth={(key) => {
-            onSelectMonth(key)
-            setMode('month')
-          }}
         />
       )}
     </div>
@@ -231,7 +225,6 @@ function YearView({
   yearSeries,
   startSnapshot,
   endSnapshot,
-  onSelectMonth,
 }: {
   year: number
   yearRows: Array<{ key: string; snapshot: ReturnType<typeof getSnapshot>; metrics: ReturnType<typeof monthMetrics> }>
@@ -244,7 +237,6 @@ function YearView({
   yearSeries: Array<{ key: string; value: number | null; reference: number | null }>
   startSnapshot: ReturnType<typeof getSnapshot>
   endSnapshot: ReturnType<typeof getSnapshot>
-  onSelectMonth: (key: string) => void
 }) {
   const ledger = useLedger()
   if (!endSnapshot) {
@@ -310,55 +302,6 @@ function YearView({
           <span className="tiny faint">绿线为工资</span>
         </div>
         <MiniBars points={yearSeries} />
-      </section>
-
-      <section className="card" style={{ marginTop: 12, padding: 0, overflow: 'hidden' }}>
-        <div className="section-title" style={{ margin: 0, padding: '14px 16px 8px' }}>
-          月度明细
-          <span className="tiny faint">{yearRows.filter((row) => row.snapshot).length} 个月</span>
-        </div>
-        {yearRows.map((row) => {
-          if (!row.snapshot) return null
-          return (
-            <button
-              key={row.key}
-              className="list-row"
-              style={{ background: 'transparent' }}
-              onClick={() => onSelectMonth(row.key)}
-            >
-              <div
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
-                  background: 'var(--fill-2)',
-                  color: 'var(--accent)',
-                  display: 'grid',
-                  placeItems: 'center',
-                  fontSize: 11,
-                  fontWeight: 750,
-                }}
-              >
-                {row.snapshot.month}月
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{monthLabel(row.key, false)}</div>
-                <div className="tiny faint">
-                  工资 {row.metrics.salary !== null ? formatMoney(row.metrics.salary) : '—'}
-                </div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div className="money" style={{ fontSize: 13, fontWeight: 700 }}>
-                  {formatMoney(totalOf(row.snapshot, ledger))}
-                </div>
-                <div className="tiny money" style={{ color: (row.metrics.netSpend ?? 0) >= 0 ? 'var(--text-2)' : 'var(--green)' }}>
-                  {row.metrics.netSpend === null ? '净开销 —' : `${row.metrics.netSpend >= 0 ? '净开销' : '结余'} ${formatMoney(Math.abs(row.metrics.netSpend))}`}
-                </div>
-              </div>
-              <ChevronRight size={14} className="faint" />
-            </button>
-          )
-        })}
       </section>
 
       <section className="card" style={{ marginTop: 12 }}>

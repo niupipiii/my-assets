@@ -124,7 +124,7 @@ export function App({ boot }: { boot: BootState }) {
         onOpenFlow={() => setFlowOpen(true)}
       />
     ) : tab === 'reports' ? (
-      <ReportsScreen month={month} onPickMonth={() => setPickerOpen(true)} onSelectMonth={setMonth} />
+      <ReportsScreen month={month} onPickMonth={() => setPickerOpen(true)} />
     ) : tab === 'history' ? (
       <HistoryScreen onOpenEntry={openEntry} />
     ) : (
