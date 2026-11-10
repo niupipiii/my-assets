@@ -204,7 +204,7 @@ export function AccountsScreen({ open, onClose }: { open: boolean; onClose: () =
             toast.show(added > 0 ? `已补齐 ${added} 个默认账户` : '默认账户已经齐全')
           }}
         >
-          补齐默认账户（现金 / 储蓄 / 理财 / 基金 / 股票）
+          补齐默认账户
         </button>
         <p className="tiny faint" style={{ margin: '10px 4px 0', lineHeight: 1.5 }}>
           默认结构：微信零钱 / 农行现金 / 中行现金 / 招行现金；余额宝 / 招行储蓄；农行理财 / 招行理财 /
