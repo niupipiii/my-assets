@@ -2,30 +2,22 @@ import { useMemo, useState } from 'react'
 import { CalendarDays, ChevronRight, Share2 } from 'lucide-react'
 import { CATEGORIES, categoryOf } from '../../domain/categories'
 import {
-  allocationOf,
-  categoryTotalOf,
   categoryTotalsOf,
-  currentMonthKey,
-  effectiveSalary,
   getSnapshot,
-  latestSnapshotKey,
   monthKey,
   monthLabel,
   monthMetrics,
   monthSeries,
-  prevMonthKey,
-  snapshotKey,
   totalOf,
-  topMovers,
 } from '../../domain/selectors'
 import { formatMoney, formatPercent, formatSignedMoney } from '../../domain/money'
-import type { CategoryKey } from '../../domain/types'
 import { useLedger } from '../../store/LedgerProvider'
 import { useToast } from '../../components/Toast'
 import { Segmented } from '../../components/Segmented'
 import { EmptyState } from '../../components/EmptyState'
 import { CategoryIcon } from '../../components/CategoryIcon'
 import { MiniBars } from '../../components/charts/MiniBars'
+import { AccountStackChart } from '../../components/charts/AccountStackChart'
 import { shareMonthReport } from '../../lib/shareReport'
 
 export function ReportsScreen({
@@ -44,8 +36,6 @@ export function ReportsScreen({
   const snapshot = getSnapshot(ledger, month)
   const metrics = monthMetrics(ledger, month)
   const series = monthSeries(ledger, month, 12)
-  const prevSnapshot = getSnapshot(ledger, prevMonthKey(month))
-  const prevKey = prevMonthKey(month)
 
   const year = Number(month.slice(0, 4))
   const yearMonths = useMemo(() => Array.from({ length: 12 }, (_, index) => monthKey(year, index + 1)), [year])
@@ -71,26 +61,6 @@ export function ReportsScreen({
     value: row.metrics.netSpend,
     reference: row.metrics.salary,
   }))
-
-  const categoryDeltas = CATEGORIES.map((category) => {
-    const current = categoryTotalOf(snapshot, ledger, category.key)
-    const previous = categoryTotalOf(prevSnapshot, ledger, category.key)
-    return { category: category.key, current, previous, delta: current - previous }
-  }).filter((row) => row.current !== 0 || row.previous !== 0)
-
-  const drift = CATEGORIES.map((category) => {
-    const current = categoryTotalOf(snapshot, ledger, category.key)
-    const previous = categoryTotalOf(prevSnapshot, ledger, category.key)
-    const currentTotal = totalOf(snapshot, ledger)
-    const previousTotal = prevSnapshot ? totalOf(prevSnapshot, ledger) : 0
-    const currentShare = currentTotal > 0 ? current / currentTotal : 0
-    const previousShare = previousTotal > 0 ? previous / previousTotal : 0
-    return { category: category.key, currentShare, previousShare, diff: currentShare - previousShare, current }
-  }).filter((row) => row.current !== 0)
-
-  const movers = topMovers(ledger, month, 5)
-  const topContribution = [...categoryDeltas].sort((a, b) => b.delta - a.delta)[0]
-  const maxAbsDelta = Math.max(1, ...categoryDeltas.map((row) => Math.abs(row.delta)))
 
   const summaryParts: string[] = []
   if (metrics.delta !== null && metrics.prevTotal) {
@@ -189,12 +159,6 @@ export function ReportsScreen({
               </div>
               <div className="small" style={{ marginTop: 10, color: 'var(--text-2)', lineHeight: 1.6 }}>
                 {summaryParts.length > 0 ? summaryParts.join('，') + '。' : '补齐上月余额与工资后，月报会更完整。'}
-                {topContribution && topContribution.delta > 0 && (
-                  <>
-                    {' '}主要变动来自 {categoryOf(topContribution.category).short}{' '}
-                    {formatSignedMoney(topContribution.delta)}。
-                  </>
-                )}
               </div>
               <button
                 className="btn"
@@ -215,141 +179,12 @@ export function ReportsScreen({
             </section>
 
             <section className="card" style={{ marginTop: 12 }}>
-              <div className="section-title" style={{ margin: 0, marginBottom: 4 }}>
-                本月推导
-                <span className="tiny faint">工资 + 收益 − 资产变化</span>
+              <div className="section-title" style={{ margin: 0, marginBottom: 8 }}>
+                账户月度构成
+                <span className="tiny faint">每月 100% · 按账户</span>
               </div>
-              <div style={{ marginTop: 4 }}>
-                <DerivationRow label="工资" value={metrics.salary} />
-                <DerivationRow label="其他收入" value={metrics.otherIncome || null} />
-                <DerivationRow label="投资收益（估算）" value={metrics.investReturn} />
-                <DerivationRow label="资产变化" value={metrics.delta} />
-                <DerivationRow label="其他流出（非消费）" value={metrics.otherOutflow || null} negative />
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    paddingTop: 10,
-                    marginTop: 6,
-                    borderTop: '0.5px solid var(--separator)',
-                  }}
-                >
-                  <span style={{ fontSize: 14, fontWeight: 700 }}>
-                    {metrics.netSpend !== null && metrics.netSpend < 0 ? '净结余' : '净开销'}
-                  </span>
-                  <span className="money" style={{ fontSize: 17, fontWeight: 800 }}>
-                    {metrics.netSpend === null ? '—' : formatMoney(Math.abs(metrics.netSpend))}
-                  </span>
-                </div>
-              </div>
-              <p className="tiny faint" style={{ margin: '10px 0 0', lineHeight: 1.5 }}>
-                投资收益 = 投资类资产变化 − 本月净转入投资。转入/转出投资请在"记录 → 调整项"填写。
-              </p>
+              <AccountStackChart ledger={ledger} month={month} />
             </section>
-
-            <section className="card" style={{ marginTop: 12 }}>
-              <div className="section-title" style={{ margin: 0, marginBottom: 6 }}>
-                变动归因
-                <span className="tiny faint">较 {monthLabel(prevKey)}</span>
-              </div>
-              {categoryDeltas.length === 0 ? (
-                <div className="small faint" style={{ padding: '10px 0' }}>
-                  本月没有分类变化
-                </div>
-              ) : (
-                <>
-                  <div className="small muted" style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0 8px' }}>
-                    <span>期初 {metrics.prevTotal !== null ? formatMoney(metrics.prevTotal) : '—'}</span>
-                    <span>期末 {formatMoney(totalOf(snapshot, ledger))}</span>
-                  </div>
-                  {categoryDeltas
-                    .slice()
-                    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-                    .map((row) => (
-                      <div key={row.category} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
-                        <CategoryIcon category={row.category} size={26} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                            <span>{categoryOf(row.category).short}</span>
-                            <span className="money" style={{ color: row.delta >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 650 }}>
-                              {formatSignedMoney(row.delta)}
-                            </span>
-                          </div>
-                          <div
-                            style={{
-                              height: 4,
-                              borderRadius: 99,
-                              marginTop: 4,
-                              background: 'var(--fill-2)',
-                              overflow: 'hidden',
-                            }}
-                          >
-                            <div
-                              style={{
-                                height: '100%',
-                                width: `${(Math.abs(row.delta) / maxAbsDelta) * 100}%`,
-                                borderRadius: 99,
-                                background: row.delta >= 0 ? 'var(--green)' : 'var(--red)',
-                                opacity: 0.75,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                </>
-              )}
-            </section>
-
-            <section className="card" style={{ marginTop: 12 }}>
-              <div className="section-title" style={{ margin: 0, marginBottom: 6 }}>
-                配置漂移
-                <span className="tiny faint">百分点变化</span>
-              </div>
-              {drift.map((row) => {
-                const pp = Math.round(row.diff * 100)
-                return (
-                  <div key={row.category} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
-                    <span className="dot" style={{ background: categoryOf(row.category).color }} />
-                    <span style={{ flex: 1, fontSize: 13 }}>{categoryOf(row.category).short}</span>
-                    <span className="money tiny" style={{ color: 'var(--text-2)' }}>
-                      {Math.round(row.currentShare * 100)}%
-                    </span>
-                    <span
-                      className="money tiny"
-                      style={{
-                        width: 54,
-                        textAlign: 'right',
-                        fontWeight: 650,
-                        color: pp === 0 ? 'var(--text-2)' : pp > 0 ? 'var(--green)' : 'var(--red)',
-                      }}
-                    >
-                      {pp === 0 ? '0pp' : `${pp > 0 ? '+' : ''}${pp}pp`}
-                    </span>
-                  </div>
-                )
-              })}
-            </section>
-
-            {movers.length > 0 && (
-              <section className="card" style={{ marginTop: 12, padding: 0, overflow: 'hidden' }}>
-                <div className="section-title" style={{ margin: 0, padding: '14px 16px 8px' }}>
-                  账户涨跌 Top 5
-                </div>
-                {movers.map((row) => (
-                  <div key={row.account.id} className="list-row" style={{ background: 'transparent' }}>
-                    <CategoryIcon category={row.account.category} size={28} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>{row.account.name}</div>
-                      <div className="tiny faint">{categoryOf(row.account.category).short}</div>
-                    </div>
-                    <div className="money" style={{ fontSize: 14, fontWeight: 700, color: row.delta >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                      {formatSignedMoney(row.delta)}
-                    </div>
-                  </div>
-                ))}
-              </section>
-            )}
           </>
         )
       ) : (
@@ -371,26 +206,6 @@ export function ReportsScreen({
           }}
         />
       )}
-    </div>
-  )
-}
-
-function DerivationRow({ label, value, negative = false }: { label: string; value: number | null; negative?: boolean }) {
-  const ledger = useLedger()
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0' }}>
-      <span className="small muted">{label}</span>
-      <span className="money small" style={{ fontWeight: 650, color: negative && value ? 'var(--red)' : 'var(--text)' }}>
-        {value === null || value === 0
-          ? value === 0
-            ? '¥0'
-            : '—'
-          : ledger.settings.hideAmounts
-            ? '••••'
-            : negative
-              ? `−${formatMoney(value)}`
-              : formatMoney(value)}
-      </span>
     </div>
   )
 }
