@@ -140,4 +140,86 @@ describe('ocr api', () => {
     const body = res.body as { data: { balances: Array<{ amount: number }> } }
     expect(body.data.balances[0].amount).toBe(100)
   })
+
+  it('infers the bank from the Chinese bank asset-management signature', async () => {
+    configure()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                institution: '',
+                kind: 'bank',
+                balances: [
+                  { label: '活钱管理', section: '现金', isTotal: true, amount: 12333.91 },
+                  { label: '稳健投资', section: '理财', isTotal: true, amount: 33239.17 },
+                ],
+              }),
+            },
+          },
+        ],
+      }),
+    }))
+    const res = makeRes()
+    await handler(makeReq() as never, res as never)
+    const body = res.body as { data: { institution: string; balances: unknown[] } }
+    expect(body.data.institution).toBe('中国银行')
+    expect(body.data.balances).toHaveLength(2)
+  })
+
+  it('repairs a missing 招商银行 deposit with a targeted second pass', async () => {
+    configure()
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  institution: '招商银行',
+                  kind: 'bank',
+                  balances: [
+                    { label: '活钱', section: '现金', isTotal: true, amount: 407.64 },
+                    { label: '理财', section: '理财', isTotal: true, amount: 60780.74 },
+                  ],
+                }),
+              },
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  institution: '招商银行',
+                  balances: [{ label: '存款', section: '储蓄', isTotal: true, amount: 96000 }],
+                }),
+              },
+            },
+          ],
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+    const res = makeRes()
+    await handler(makeReq() as never, res as never)
+    const body = res.body as {
+      data: { institution: string; balances: Array<{ label: string; amount: number }> }
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(body.data.institution).toBe('招商银行')
+    expect(body.data.balances.some((balance) => balance.label.includes('存款'))).toBe(true)
+    expect(body.data.balances.find((balance) => balance.label.includes('存款'))?.amount).toBe(96000)
+  })
+
 })

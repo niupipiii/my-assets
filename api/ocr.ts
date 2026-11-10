@@ -32,11 +32,18 @@ const PROMPT = `你是个人资产截图的信息提取器。用户只需要"分
 3. 不要返回全局"总资产 / 总负债 / 资产总额 / 负债总额 / 资产合计 / 汇总 / 总计"行；除非整张图只有这一个数字（作为兜底）。
 4. 同一个金额在汇总行和账户行重复出现时只返回一次，优先分类合计行。例：活期 8,855.09 和 尾号6777 8,855.09 只返回一条。
 5. label 用分类名或账户名；section 用一级分类：现金 / 储蓄 / 理财 / 基金 / 股票 / 其他；isTotal 标记是否是分类合计。
-6. institution 用机构全名，例如 中国农业银行、招商银行、中国银行、微信、支付宝。只有截图明确出现银行名称/Logo 时才填；不要凭配色或理财产品名（例如页面里的"光大理财"）猜银行；不确定就留空。
+6. 先根据页面结构识别来源机构（这是用户每月固定上传的 6 类截图），按下面的特征判断，不要凭配色猜：
+   - 东方财富：橙色头部，出现 东方财富 / 总资产 / 证券市值 / 持仓 / 可用 → institution=东方财富，只返回一条 股票=总资产。
+   - 中国银行：顶部"资产管理"、"我的资产"，分组"活钱管理 / 稳健投资 / 进取投资 / 保险保障" → institution=中国银行。
+   - 招商银行：顶部"账户总览"，有"活钱 / 投资"分组；"活钱"下有 直接可用 / 快速赎回 / 日日宝 / 朝朝盈；"投资"下有 存款 / 理财；理财产品名可能出现"光大理财"，不要据此判为光大银行 → institution=招商银行。招商银行必须返回 活钱、存款、理财 三条（存款通常是定期/大额存单），不能只返回活钱和理财。
+   - 微信：顶部"钱包"，出现 零钱 / 零钱通 / 银行卡 → institution=微信。
+   - 支付宝：出现 余额宝 / 基金 / 余额 / 定期 / 总资产 → institution=支付宝。
+   - 中国农业银行：顶部"资产负债"，出现 活期 / 理财 / 农银理财 → institution=中国农业银行。
+   以上特征都不匹配时才留空 institution，并降低 confidence。
 7. amount 纯数字，不带货币符号、千分位、单位；人民币为正数。
 8. 证券/股票 App（东方财富、证券、持仓、总资产、证券市值、可用）：只返回一条 {"label":"股票","section":"股票","isTotal":true,"amount":总资产}；看不到总资产时才用证券市值。不要返回 证券市值/可用/可取/持仓明细。
 9. 一级分类映射：活期/活钱/活钱管理/零钱 → 现金；储蓄/存款/定期/余额宝/零钱通 → 储蓄；理财/稳健投资 → 理财；基金 → 基金；股票/证券 → 股票。
-10. "投资"这种上级分组如果下面还有 存款/理财 等能映射到上述分类的子项，返回子项，不要返回上级"投资"总额；如果分组本身只对应一个分类（例如稳健投资），返回该分类合计。
+10. "投资"这种上级分组如果下面还有 存款/理财 等能映射到上述分类的子项，必须把 存款 和 理财 分别返回，不能只返回理财；如果分组本身只对应一个分类（例如稳健投资），返回该分类合计。
 
 输出 JSON（不要 Markdown 代码块，不要解释）：
 {
@@ -146,6 +153,82 @@ function normalizeSection(raw: string, label: string): string {
   return '其他'
 }
 
+/** 六类固定截图的标签特征；只有匹配到才返回机构。 */
+function signatureInstitution(labels: string[]): string | undefined {
+  const text = labels.join(' ')
+  if (/活钱管理|稳健投资|进取投资/.test(text)) return '中国银行'
+  if (/活钱/.test(text)) return '招商银行'
+  if (/活期/.test(text) && /理财/.test(text)) return '中国农业银行'
+  if (/零钱|零钱通/.test(text)) return '微信'
+  if (/余额宝|基金/.test(text)) return '支付宝'
+  if (/股票|证券市值/.test(text)) return '东方财富'
+  return undefined
+}
+
+/** 固定截图里必须出现的项目；漏项时做一次针对性补提取。 */
+const EXPECTED_FIELDS: Record<string, Array<{ label: string; section: string }>> = {
+  招商银行: [
+    { label: '活钱', section: '现金' },
+    { label: '存款', section: '储蓄' },
+    { label: '理财', section: '理财' },
+  ],
+  中国银行: [
+    { label: '活钱管理', section: '现金' },
+    { label: '稳健投资', section: '理财' },
+  ],
+  中国农业银行: [
+    { label: '活期', section: '现金' },
+    { label: '理财', section: '理财' },
+  ],
+  微信: [{ label: '零钱', section: '现金' }],
+  支付宝: [
+    { label: '余额宝', section: '储蓄' },
+    { label: '基金', section: '基金' },
+  ],
+  东方财富: [{ label: '股票', section: '股票' }],
+}
+
+type NormalizedBalance = {
+  label: string
+  section: string
+  isTotal: boolean
+  amount: number
+  currency: string
+  confidence: number
+  evidence: string
+}
+
+function normalizeBalance(balance: z.infer<typeof BalanceSchema>): NormalizedBalance | null {
+  const amount = parseAmount(balance.amount)
+  if (amount === null || amount === 0) return null
+  const confidenceRaw =
+    typeof balance.confidence === 'number' ? balance.confidence : Number(balance.confidence ?? 0.5)
+  const confidence = Number.isFinite(confidenceRaw)
+    ? Math.min(1, Math.max(0, confidenceRaw))
+    : 0.5
+  const label = (balance.label ?? '').trim().slice(0, 40)
+  const section = normalizeSection((balance.section ?? '').trim(), label)
+  const isTotal =
+    balance.isTotal === true || String(balance.isTotal ?? '').toLowerCase() === 'true'
+  return {
+    label,
+    section,
+    isTotal,
+    amount,
+    currency: (balance.currency ?? 'CNY').trim().slice(0, 8) || 'CNY',
+    confidence,
+    evidence: (balance.evidence ?? '').trim().slice(0, 80),
+  }
+}
+
+function kindForInstitution(institution: string, fallback: string): string {
+  if (institution === '微信') return 'wechat'
+  if (institution === '支付宝') return 'alipay'
+  if (institution === '东方财富') return 'other'
+  if (institution) return 'bank'
+  return KINDS.has(fallback) ? fallback : 'other'
+}
+
 function jsonError(res: VercelResponse, status: number, code: string, message: string) {
   res.status(status).json({ ok: false, error: { code, message } })
 }
@@ -174,6 +257,7 @@ async function callProvider(
   model: string,
   image: string,
   withJsonMode: boolean,
+  prompt: string,
 ): Promise<unknown> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS)
@@ -197,7 +281,7 @@ async function callProvider(
           {
             role: 'user',
             content: [
-              { type: 'text', text: PROMPT },
+              { type: 'text', text: prompt },
               { type: 'image_url', image_url: { url: image, detail: 'high' } },
             ],
           },
@@ -291,11 +375,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     let raw: unknown
     try {
-      raw = await callProvider(baseUrl, apiKey, model, image, true)
+      raw = await callProvider(baseUrl, apiKey, model, image, true, PROMPT)
     } catch (error) {
       const status = (error as Error & { status?: number }).status
       if (status === 400 || status === 422) {
-        raw = await callProvider(baseUrl, apiKey, model, image, false)
+        raw = await callProvider(baseUrl, apiKey, model, image, false, PROMPT)
       } else {
         throw error
       }
@@ -308,31 +392,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const balances = parsed.data.balances
-      .map((balance) => {
-        const amount = parseAmount(balance.amount)
-        if (amount === null || amount === 0) return null
-        const confidenceRaw =
-          typeof balance.confidence === 'number'
-            ? balance.confidence
-            : Number(balance.confidence ?? 0.5)
-        const confidence = Number.isFinite(confidenceRaw)
-          ? Math.min(1, Math.max(0, confidenceRaw))
-          : 0.5
-        const label = (balance.label ?? '').trim().slice(0, 40)
-        const section = normalizeSection((balance.section ?? '').trim(), label)
-        const isTotal =
-          balance.isTotal === true || String(balance.isTotal ?? '').toLowerCase() === 'true'
-        return {
-          label,
-          section,
-          isTotal,
-          amount,
-          currency: (balance.currency ?? 'CNY').trim().slice(0, 8) || 'CNY',
-          confidence,
-          evidence: (balance.evidence ?? '').trim().slice(0, 80),
-        }
-      })
-      .filter((balance): balance is NonNullable<typeof balance> => balance !== null)
+      .map(normalizeBalance)
+      .filter((balance): balance is NormalizedBalance => balance !== null)
 
     const withoutGlobal = balances.filter(
       (balance) => !GLOBAL_TOTAL.test(balance.label) && !GLOBAL_TOTAL.test(balance.section),
@@ -354,14 +415,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const existing = unique.get(key)
       if (!existing || balance.confidence > existing.confidence) unique.set(key, balance)
     }
-    const finalBalances = [...unique.values()].slice(0, 20)
 
+    const finalBalances: NormalizedBalance[] = [...unique.values()].slice(0, 20)
     const kindRaw = (parsed.data.kind ?? 'other').toLowerCase()
+    const modelInstitution = (parsed.data.institution ?? '').trim().slice(0, 40)
+    let signature = signatureInstitution(finalBalances.map((balance) => balance.label))
+    let institution = signature ?? modelInstitution
+
+    // 六类固定截图有已知项目；模型偶尔会漏（例如招商的“存款”），对漏项做一次定向补提取。
+    if (signature) {
+      const expected = EXPECTED_FIELDS[signature] ?? []
+      const missing = expected.filter(
+        (item) =>
+          !finalBalances.some(
+            (balance) => balance.label.includes(item.label) || item.label.includes(balance.label),
+          ),
+      )
+      for (const item of missing.slice(0, 2)) {
+        try {
+          const known = finalBalances.map((balance) => balance.label).join('、') || '无'
+          const repairPrompt = `这是${signature}的资产截图。上一轮已经识别到：${known}。请只提取「${item.label}」这一项的当前合计金额（section=${item.section}，isTotal=true），不要返回其他项目，不要返回总资产。输出 JSON：{"institution":"${signature}","balances":[{"label":"${item.label}","section":"${item.section}","isTotal":true,"amount":0,"currency":"CNY","confidence":0.9,"evidence":""}]}。如果确实没有这一项，balances 返回空数组。`
+          const repairRaw = await callProvider(baseUrl, apiKey, model, image, true, repairPrompt)
+          const repair = ResultSchema.safeParse(repairRaw)
+          if (!repair.success) continue
+          for (const balance of repair.data.balances) {
+            const normalized = normalizeBalance(balance)
+            if (!normalized) continue
+            if (
+              !finalBalances.some(
+                (existing) =>
+                  existing.label === normalized.label && existing.amount === normalized.amount,
+              )
+            ) {
+              finalBalances.push({ ...normalized, isTotal: true })
+            }
+          }
+        } catch {
+          // 补提取是尽力而为，不阻塞整张图
+        }
+      }
+      signature = signatureInstitution(finalBalances.map((balance) => balance.label))
+      if (signature) institution = signature
+    }
+
     res.status(200).json({
       ok: true,
       data: {
-        institution: (parsed.data.institution ?? '').trim().slice(0, 40),
-        kind: KINDS.has(kindRaw) ? kindRaw : 'other',
+        institution,
+        kind: kindForInstitution(institution, kindRaw),
         asOf: (parsed.data.asOf ?? '').trim().slice(0, 20),
         balances: finalBalances,
       },

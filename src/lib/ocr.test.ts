@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { matchAccount, parseTextAmounts, suggestAccount } from './ocr'
+import { createDefaultAccounts } from '../domain/defaults'
 import type { Account } from '../domain/types'
 
 const accounts: Account[] = [
@@ -65,5 +66,32 @@ describe('matchAccount', () => {
       accounts,
     )
     expect(suggestion).toMatchObject({ name: '农行现金', category: 'cash' })
+  })
+})
+
+describe('default account auto-mapping', () => {
+  it('maps the six monthly sources to the default accounts without manual picks', () => {
+    const defaults = createDefaultAccounts(0)
+    const cases: Array<[string, string, string, string, string]> = [
+      ['活钱管理', '现金', '中国银行', 'bank', '中行现金'],
+      ['稳健投资', '理财', '中国银行', 'bank', '中行理财'],
+      ['活钱', '现金', '招商银行', 'bank', '招行现金'],
+      ['存款', '储蓄', '招商银行', 'bank', '招行储蓄'],
+      ['理财', '理财', '招商银行', 'bank', '招行理财'],
+      ['活期', '现金', '中国农业银行', 'bank', '农行现金'],
+      ['理财', '理财', '中国农业银行', 'bank', '农行理财'],
+      ['余额宝', '储蓄', '支付宝', 'alipay', '余额宝'],
+      ['基金', '基金', '支付宝', 'alipay', '基金'],
+      ['零钱', '现金', '微信', 'wechat', '微信零钱'],
+      ['股票', '股票', '东方财富', 'other', '股票'],
+    ]
+    for (const [label, section, institution, kind, expected] of cases) {
+      const id = matchAccount(
+        { label, section, isTotal: true, amount: 100, currency: 'CNY', confidence: 0.95 },
+        { kind: kind as 'bank' | 'alipay' | 'wechat' | 'other', institution },
+        defaults,
+      )
+      expect(defaults.find((account) => account.id === id)?.name, label).toBe(expected)
+    }
   })
 })

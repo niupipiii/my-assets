@@ -86,7 +86,7 @@ export async function compressImage(file: File): Promise<string> {
   try {
     const image = await loadImage(objectUrl)
     const longest = Math.max(image.naturalWidth, image.naturalHeight)
-    const maxSide = 2048
+    const maxSide = 2560
     const scale = longest > maxSide ? maxSide / longest : 1
     const width = Math.max(1, Math.round(image.naturalWidth * scale))
     const height = Math.max(1, Math.round(image.naturalHeight * scale))
@@ -122,10 +122,20 @@ function normalize(text: string): string {
   return text.replace(/[\s\-_·]/g, '').toLowerCase()
 }
 
+export function categoryFromSection(section: string): CategoryKey | undefined {
+  if (section === '现金') return 'cash'
+  if (section === '储蓄') return 'savings'
+  if (section === '理财') return 'bond'
+  if (section === '基金') return 'fund'
+  if (section === '股票') return 'stock'
+  return undefined
+}
+
 export function categoryFromText(text: string): CategoryKey {
-  if (/活期|现金|零钱|存款|尾号/.test(text)) return 'cash'
-  if (/储蓄|余额宝/.test(text)) return 'savings'
-  if (/理财|定期/.test(text)) return 'bond'
+  if (/余额宝|零钱通/.test(text)) return 'savings'
+  if (/活期|活钱|现金|零钱|尾号/.test(text)) return 'cash'
+  if (/储蓄|存款|定期/.test(text)) return 'savings'
+  if (/理财|稳健投资/.test(text)) return 'bond'
   if (/基金/.test(text)) return 'fund'
   if (/股票|证券/.test(text)) return 'stock'
   return 'other'
@@ -158,7 +168,7 @@ export function suggestAccount(
   accounts: Account[],
 ): AccountSuggestion | undefined {
   const text = `${result.institution} ${balance.section ?? ''} ${balance.label}`
-  const category = categoryFromText(text)
+  const category = categoryFromSection(balance.section ?? '') ?? categoryFromText(text)
   const short = institutionShort(result.institution)
   const label = balance.label.trim()
 
