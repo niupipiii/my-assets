@@ -90,7 +90,6 @@ export function HistoryScreen({
     <div className="screen">
       <header style={{ marginBottom: 12 }}>
         <h1 className="large-title">明细</h1>
-        <p className="page-subtitle">按月查看余额、变动与净开销</p>
       </header>
 
       <div className="search-box">

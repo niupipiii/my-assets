@@ -18,7 +18,6 @@ import {
 } from 'lucide-react'
 import { CATEGORIES, DEFAULT_INVESTMENT_CATEGORIES } from '../../domain/categories'
 import { formatMoney, parseAmount, roundMoney } from '../../domain/money'
-import { latestSnapshot, monthLabel, totalOf } from '../../domain/selectors'
 import type { CategoryKey, LedgerV2, LegacyCandidate } from '../../domain/types'
 import {
   backupFilename,
@@ -70,7 +69,6 @@ export function SettingsScreen({
   const [pendingImport, setPendingImport] = useState<{ ledger: LedgerV2; warnings: string[] } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const latest = latestSnapshot(ledger)
   const backups = listBackups()
   const legacyCopy = readLegacyCopy()
 
@@ -232,10 +230,6 @@ export function SettingsScreen({
     <div className="screen">
       <header style={{ marginBottom: 8 }}>
         <h1 className="large-title">设置</h1>
-        <p className="page-subtitle">
-          {ledger.snapshots.length} 个月 · {ledger.accounts.length} 个账户
-          {latest ? ` · 最新 ${monthLabel(`${latest.year}-${String(latest.month).padStart(2, '0')}`)} ${formatMoney(totalOf(latest, ledger))}` : ''}
-        </p>
       </header>
 
       <Section title="外观与提醒">

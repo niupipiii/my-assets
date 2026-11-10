@@ -88,7 +88,6 @@ export function ReportsScreen({
       <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10, marginBottom: 14 }}>
         <div>
           <h1 className="large-title">报表</h1>
-          <p className="page-subtitle">把数字变成能看懂的变化</p>
         </div>
         <button className="pill" onClick={onPickMonth} style={{ padding: '8px 11px', background: 'var(--card)', boxShadow: 'var(--shadow)' }}>
           <CalendarDays size={14} />

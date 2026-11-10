@@ -285,9 +285,6 @@ export function Overview({
                     {formatMoney(metrics.otherOutflow)} · 转入投资 {formatMoney(metrics.transfer)}
                   </div>
                 )}
-                <div className="tiny faint" style={{ marginTop: 6 }}>
-                  投资收益为估算（投资类资产变化 − 转入投资）
-                </div>
               </>
             ) : (
               <div style={{ marginTop: 6 }}>
