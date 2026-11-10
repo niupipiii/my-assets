@@ -17,8 +17,17 @@ interface Point {
   values: number[]
 }
 
-export function AccountStackChart({ ledger, month }: { ledger: LedgerV2; month: string }) {
+export function AccountStackChart({
+  ledger,
+  month,
+  highlight,
+}: {
+  ledger: LedgerV2
+  month: string
+  highlight?: string
+}) {
   const count = 12
+  const selectedKey = highlight ?? month
   const keys = useMemo(
     () => Array.from({ length: count }, (_, index) => shiftMonth(month, index - count + 1)),
     [month],
@@ -45,8 +54,8 @@ export function AccountStackChart({ ledger, month }: { ledger: LedgerV2; month: 
     [keys, snapshots, categories, ledger],
   )
 
-  const current = points[points.length - 1]
-  const prevSnapshot = getSnapshot(ledger, prevMonthKey(month))
+  const current = points.find((point) => point.key === selectedKey) ?? points[points.length - 1]
+  const prevSnapshot = getSnapshot(ledger, prevMonthKey(selectedKey))
   const prevValues = categories.map((category) => categoryTotalOf(prevSnapshot, ledger, category.key))
   const prevTotal = prevValues.reduce((sum, value) => sum + value, 0)
 
@@ -84,7 +93,7 @@ export function AccountStackChart({ ledger, month }: { ledger: LedgerV2; month: 
         <line x1="4" x2={width - 4} y1={top + plotHeight} y2={top + plotHeight} stroke="var(--separator)" strokeWidth="0.8" />
         {points.map((point, pointIndex) => {
           const x = 4 + pointIndex * slot + (slot - barWidth) / 2
-          const isSelected = point.key === month
+          const isSelected = point.key === selectedKey
           let y = top + plotHeight
           return (
             <g key={point.key}>
@@ -142,7 +151,7 @@ export function AccountStackChart({ ledger, month }: { ledger: LedgerV2; month: 
 
       <div className="tiny faint" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
         <span>每月总资产 = 100%</span>
-        <span>{monthLabel(month)}</span>
+        <span>{monthLabel(selectedKey)}</span>
       </div>
 
       <div

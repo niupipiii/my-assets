@@ -316,6 +316,7 @@ export function Overview({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div className="section-title" style={{ margin: 0 }}>
                 总资产趋势
+                <span className="tiny faint" style={{ marginLeft: 2 }}>（万）</span>
               </div>
               <div style={{ width: 110 }}>
                 <Segmented

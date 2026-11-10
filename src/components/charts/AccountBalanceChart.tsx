@@ -12,11 +12,20 @@ import type { LedgerV2 } from '../../domain/types'
 
 interface Point {
   key: string
-  values: number[]
+  values: Array<number | null>
 }
 
-export function AccountBalanceChart({ ledger, month }: { ledger: LedgerV2; month: string }) {
+export function AccountBalanceChart({
+  ledger,
+  month,
+  highlight,
+}: {
+  ledger: LedgerV2
+  month: string
+  highlight?: string
+}) {
   const count = 12
+  const selectedKey = highlight ?? month
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   const keys = useMemo(
     () => Array.from({ length: count }, (_, index) => shiftMonth(month, index - count + 1)),
@@ -39,16 +48,20 @@ export function AccountBalanceChart({ ledger, month }: { ledger: LedgerV2; month
         const snapshot = snapshots.get(key)
         return {
           key,
-          values: categories.map((category) => categoryTotalOf(snapshot, ledger, category.key)),
+          values: snapshot
+            ? categories.map((category) => categoryTotalOf(snapshot, ledger, category.key))
+            : categories.map(() => null),
         }
       }),
     [keys, snapshots, categories, ledger],
   )
 
-  const current = points[points.length - 1]
+  const current = points.find((point) => point.key === selectedKey) ?? points[points.length - 1]
   const currentValues = current?.values ?? []
-  const allValues = points.flatMap((point) => point.values)
-  const dataMax = Math.max(0, ...allValues)
+  const allValues = points
+    .flatMap((point) => point.values)
+    .filter((value): value is number => value !== null)
+  const dataMax = allValues.length > 0 ? Math.max(0, ...allValues) : 0
   const max = dataMax > 0 ? dataMax * 1.08 : 1
   const min = 0
   const ticks = [max, max / 2, 0]
@@ -113,40 +126,52 @@ export function AccountBalanceChart({ ledger, month }: { ledger: LedgerV2; month
         {categories.map((category, categoryIndex) => {
           if (hidden.has(category.key)) return null
           const color = categoryOf(category.key).color
-          const pointsString = points
-            .map((point, index) => `${xFor(index)},${yFor(point.values[categoryIndex] ?? 0)}`)
-            .join(' ')
+          const segments: Array<Array<{ key: string; x: number; y: number; value: number }>> = []
+          let segment: Array<{ key: string; x: number; y: number; value: number }> = []
+          points.forEach((point, index) => {
+            const value = point.values[categoryIndex]
+            if (value === null || value === undefined) {
+              if (segment.length > 0) segments.push(segment)
+              segment = []
+              return
+            }
+            segment.push({ key: point.key, x: xFor(index), y: yFor(value), value })
+          })
+          if (segment.length > 0) segments.push(segment)
           return (
             <g key={category.key}>
-              <polyline
-                points={pointsString}
-                fill="none"
-                stroke={color}
-                strokeWidth="2"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-              {points.map((point, index) => {
-                const value = point.values[categoryIndex] ?? 0
-                const isSelected = point.key === month
-                return (
-                  <circle
-                    key={point.key}
-                    cx={xFor(index)}
-                    cy={yFor(value)}
-                    r={isSelected ? 3.2 : 1.9}
-                    fill={color}
-                    stroke="var(--card)"
-                    strokeWidth={isSelected ? 1 : 0.5}
-                  >
-                    <title>
-                      {`${monthLabel(point.key)} · ${categoryOf(category.key).label} · ${
-                        ledger.settings.hideAmounts ? '••••' : formatMoney(value)
-                      }`}
-                    </title>
-                  </circle>
-                )
-              })}
+              {segments.map((part, partIndex) => (
+                <g key={partIndex}>
+                  <polyline
+                    points={part.map((point) => `${point.x},${point.y}`).join(' ')}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+                  {part.map((point) => {
+                    const isSelected = point.key === selectedKey
+                    return (
+                      <circle
+                        key={point.key}
+                        cx={point.x}
+                        cy={point.y}
+                        r={isSelected ? 3.2 : 1.9}
+                        fill={color}
+                        stroke="var(--card)"
+                        strokeWidth={isSelected ? 1 : 0.5}
+                      >
+                        <title>
+                          {`${monthLabel(point.key)} · ${categoryOf(category.key).label} · ${
+                            ledger.settings.hideAmounts ? '••••' : formatMoney(point.value)
+                          }`}
+                        </title>
+                      </circle>
+                    )
+                  })}
+                </g>
+              ))}
             </g>
           )
         })}
@@ -158,8 +183,8 @@ export function AccountBalanceChart({ ledger, month }: { ledger: LedgerV2; month
             y={height - 5}
             textAnchor="middle"
             fontSize="8"
-            fill={point.key === month ? 'var(--text)' : 'var(--text-3)'}
-            fontWeight={point.key === month ? 650 : 400}
+            fill={point.key === selectedKey ? 'var(--text)' : 'var(--text-3)'}
+            fontWeight={point.key === selectedKey ? 650 : 400}
             fontFamily="inherit"
           >
             {shortMonthLabel(point.key)}
@@ -168,7 +193,7 @@ export function AccountBalanceChart({ ledger, month }: { ledger: LedgerV2; month
       </svg>
 
       <div className="tiny faint" style={{ marginTop: 1 }}>
-        每个一级账户每月的余额绝对值（元）· 点击图例筛选
+        每月余额
       </div>
 
       <div
@@ -182,7 +207,7 @@ export function AccountBalanceChart({ ledger, month }: { ledger: LedgerV2; month
         }}
       >
         {categories.map((category, index) => {
-          const value = currentValues[index] ?? 0
+          const value = currentValues[index]
           const dimmed = hidden.has(category.key)
           return (
             <button
@@ -228,7 +253,11 @@ export function AccountBalanceChart({ ledger, month }: { ledger: LedgerV2; month
                 {category.label}
               </span>
               <span className="money tiny" style={{ color: 'var(--text-2)', fontWeight: 650 }}>
-                {ledger.settings.hideAmounts ? '••••' : formatMoney(value)}
+                {ledger.settings.hideAmounts
+                  ? '••••'
+                  : value === null || value === undefined
+                    ? '—'
+                    : formatMoney(value)}
               </span>
             </button>
           )

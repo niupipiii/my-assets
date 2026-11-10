@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react'
 import { CalendarDays, ChevronRight, Share2 } from 'lucide-react'
-import { CATEGORIES, categoryOf } from '../../domain/categories'
 import {
-  categoryTotalsOf,
   getSnapshot,
   monthKey,
   monthLabel,
@@ -15,7 +13,6 @@ import { useLedger } from '../../store/LedgerProvider'
 import { useToast } from '../../components/Toast'
 import { Segmented } from '../../components/Segmented'
 import { EmptyState } from '../../components/EmptyState'
-import { CategoryIcon } from '../../components/CategoryIcon'
 import { MiniBars } from '../../components/charts/MiniBars'
 import { AccountStackChart } from '../../components/charts/AccountStackChart'
 import { AccountBalanceChart } from '../../components/charts/AccountBalanceChart'
@@ -205,7 +202,6 @@ export function ReportsScreen({
           yearNetSpend={yearNetSpend}
           yearSavingsRate={yearSavingsRate}
           yearSeries={yearSeries}
-          startSnapshot={yearStartSnapshot}
           endSnapshot={yearEndSnapshot}
         />
       )}
@@ -223,7 +219,6 @@ function YearView({
   yearNetSpend,
   yearSavingsRate,
   yearSeries,
-  startSnapshot,
   endSnapshot,
 }: {
   year: number
@@ -235,7 +230,6 @@ function YearView({
   yearNetSpend: number
   yearSavingsRate: number | null
   yearSeries: Array<{ key: string; value: number | null; reference: number | null }>
-  startSnapshot: ReturnType<typeof getSnapshot>
   endSnapshot: ReturnType<typeof getSnapshot>
 }) {
   const ledger = useLedger()
@@ -250,16 +244,6 @@ function YearView({
       </div>
     )
   }
-  const startTotals = startSnapshot ? categoryTotalsOf(startSnapshot, ledger) : null
-  const endTotals = categoryTotalsOf(endSnapshot, ledger)
-  const categoryChanges = CATEGORIES.map((category) => ({
-    category: category.key,
-    start: startTotals?.[category.key] ?? 0,
-    end: endTotals[category.key] ?? 0,
-    delta: (endTotals[category.key] ?? 0) - (startTotals?.[category.key] ?? 0),
-  })).filter((row) => row.end !== 0 || row.start !== 0)
-  const maxChange = Math.max(1, ...categoryChanges.map((row) => Math.abs(row.delta)))
-
   return (
     <>
       <section className="card" style={{ marginTop: 12 }}>
@@ -305,26 +289,27 @@ function YearView({
       </section>
 
       <section className="card" style={{ marginTop: 12 }}>
-        <div className="section-title" style={{ margin: 0, marginBottom: 6 }}>
-          年度分类变化
-          <span className="tiny faint">年初 → 年末</span>
+        <div className="section-title" style={{ margin: 0, marginBottom: 8 }}>
+          一级账户月度构成
+          <span className="tiny faint">每月 100% · 按一级账户</span>
         </div>
-        {categoryChanges.map((row) => (
-          <div key={row.category} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
-            <CategoryIcon category={row.category} size={26} />
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span>{categoryOf(row.category).short}</span>
-                <span className="money" style={{ color: row.delta >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 650 }}>
-                  {formatSignedMoney(row.delta)}
-                </span>
-              </div>
-              <div style={{ height: 4, borderRadius: 99, marginTop: 4, background: 'var(--fill-2)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${(Math.abs(row.delta) / maxChange) * 100}%`, background: row.delta >= 0 ? 'var(--green)' : 'var(--red)', opacity: 0.75 }} />
-              </div>
-            </div>
-          </div>
-        ))}
+        <AccountStackChart
+          ledger={ledger}
+          month={monthKey(year, 12)}
+          highlight={endSnapshot ? monthKey(endSnapshot.year, endSnapshot.month) : monthKey(year, 12)}
+        />
+      </section>
+
+      <section className="card" style={{ marginTop: 12 }}>
+        <div className="section-title" style={{ margin: 0, marginBottom: 8 }}>
+          一级账户余额趋势
+          <span className="tiny faint">每月余额 · 点击图例筛选</span>
+        </div>
+        <AccountBalanceChart
+          ledger={ledger}
+          month={monthKey(year, 12)}
+          highlight={endSnapshot ? monthKey(endSnapshot.year, endSnapshot.month) : monthKey(year, 12)}
+        />
       </section>
 
       <div className="tiny faint" style={{ margin: '14px 4px 4px', lineHeight: 1.5 }}>
